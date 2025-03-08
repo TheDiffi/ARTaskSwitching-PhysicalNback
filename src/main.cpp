@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "nback_task.h"
+#include "data_collector.h"
 
 // Create an instance of the NBackTask class
 NBackTask nBackTask;

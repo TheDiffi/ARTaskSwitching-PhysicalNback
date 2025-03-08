@@ -16,6 +16,9 @@ NBackTask::NBackTask()
       lastColorChangeTime(0),
       colorSequence(nullptr)
 {
+    // Set default study ID
+    strcpy(study_id, "DEFAULT");
+
     // Initialize timing parameters
     timing.stimulusDuration = 2000;
     timing.interStimulusInterval = 2000;
@@ -32,6 +35,12 @@ NBackTask::NBackTask()
     button.lastState = HIGH;
     button.lastDebounceTime = 0;
     button.debounceDelay = 50;
+
+    // Initialize trial data
+    trialData.reactionTime = 0;
+    trialData.stimulusOnsetTime = 0;
+    trialData.responseTime = 0;
+    trialData.stimulusEndTime = 0;
 
     // Reset metrics
     resetMetrics();
@@ -75,6 +84,8 @@ void NBackTask::setup()
     Serial.println(F("- 'start' to begin task"));
     Serial.println(F("- 'pause' to pause/resume task"));
     Serial.println(F("- 'level X' to set N-back level"));
+    Serial.println(F("- 'study_id X' to set study identifier"));
+    Serial.println(F("- 'get_data' to retrieve collected data"));
 
     // Allocate memory for color sequence
     colorSequence = new int[maxTrials];
@@ -114,7 +125,8 @@ void NBackTask::loop()
         break;
 
     case STATE_IDLE:
-        // Nothing to do in idle state
+    case STATE_DATA_READY:
+        // Nothing to do in idle or data ready state
         break;
     }
 }
@@ -162,7 +174,40 @@ void NBackTask::processSerialCommands()
         {
             enterDebugMode();
         }
+        else if (command == "get_data")
+        {
+            if (state == STATE_DATA_READY)
+            {
+                sendData();
+            }
+            else
+            {
+                Serial.println(F("No data available. Run task first."));
+            }
+        }
+        else if (command.startsWith("study_id "))
+        {
+            String id = command.substring(9);
+            id.trim();
+            if (id.length() > 0 && id.length() < sizeof(study_id))
+            {
+                id.toCharArray(study_id, sizeof(study_id));
+                Serial.print(F("Study ID set to: "));
+                Serial.println(study_id);
+            }
+        }
     }
+}
+
+void NBackTask::sendData()
+{
+    Serial.print(F("Sending data for "));
+    Serial.print(dataCollector.getTrialCount());
+    Serial.println(F(" recorded trials..."));
+
+    dataCollector.sendDataOverSerial();
+    state = STATE_IDLE;
+    Serial.println(F("Data sent. Ready for new session."));
 }
 
 //==============================================================================
@@ -183,12 +228,20 @@ void NBackTask::startTask()
     // Generate a new sequence
     generateSequence();
 
+    // Initialize data collector with study information
+    // Use a static session counter that increments each time
+    static uint16_t session_counter = 1;
+    dataCollector.begin(study_id, session_counter++);
+    dataCollector.reset();
+
     // Start the task
     state = STATE_RUNNING;
 
     Serial.println(F("Task started"));
     Serial.print(F("N-back level: "));
     Serial.println(nBackLevel);
+    Serial.print(F("Study ID: "));
+    Serial.println(study_id);
 
     // Start first trial
     startNextTrial();
@@ -255,13 +308,15 @@ void NBackTask::enterDebugMode()
 
 void NBackTask::endTask()
 {
-    state = STATE_IDLE;
+    state = STATE_DATA_READY;
     pixels.clear();
     pixels.show();
 
     reportResults();
 
-    Serial.println(F("Send 'start' to begin a new session or 'debug' to test hardware"));
+    Serial.println(F("Task complete. Data ready to send."));
+    Serial.println(F("Send 'get_data' to retrieve collected data"));
+    Serial.println(F("Send 'start' to begin a new session"));
 }
 
 //==============================================================================
@@ -308,11 +363,16 @@ void NBackTask::manageTrials()
 
 void NBackTask::evaluateTrialOutcome()
 {
+    // Record the stimulus end time
+    trialData.stimulusEndTime = millis() - dataCollector.getSessionStartTime();
+
     // Four possible outcomes:
     // 1. Target trial + button pressed = Correct response
     // 2. Target trial + no button press = Missed target (false negative)
     // 3. Non-target trial + button pressed = False alarm (false positive)
     // 4. Non-target trial + no button press = Correct rejection
+
+    bool isCorrect = false;
 
     if (flags.targetTrial && currentTrial >= nBackLevel)
     {
@@ -321,6 +381,7 @@ void NBackTask::evaluateTrialOutcome()
         {
             // Correct response
             metrics.correctResponses++;
+            isCorrect = true;
 
             // Add reaction time to totals (only for correct responses)
             metrics.totalReactionTime += trialData.reactionTime;
@@ -335,6 +396,7 @@ void NBackTask::evaluateTrialOutcome()
         {
             // Missed target (false negative)
             metrics.missedTargets++;
+            isCorrect = false;
             Serial.println(F("MISSED TARGET!"));
         }
     }
@@ -342,6 +404,7 @@ void NBackTask::evaluateTrialOutcome()
     {
         // False alarm (false positive)
         metrics.falseAlarms++;
+        isCorrect = false;
         Serial.println(F("FALSE ALARM!"));
         Serial.print(F("Reaction time: "));
         Serial.print(trialData.reactionTime);
@@ -350,8 +413,22 @@ void NBackTask::evaluateTrialOutcome()
     else
     {
         // Correct rejection (no need to count these, but could add if needed)
+        isCorrect = true;
         Serial.println(F("CORRECT REJECTION"));
     }
+
+    // Record the complete trial data in one row
+    dataCollector.recordCompletedTrial(
+        currentTrial + 1,                                 // 1-based stimulus number
+        colorSequence[currentTrial],                      // stimulus color
+        flags.targetTrial,                                // is_target
+        flags.buttonPressed,                              // response_made
+        isCorrect,                                        // is_correct
+        trialData.stimulusOnsetTime,                      // stimulus_onset_time
+        flags.buttonPressed ? trialData.responseTime : 0, // response_time (0 if no response)
+        flags.buttonPressed ? trialData.reactionTime : 0, // reaction_time (0 if no response)
+        trialData.stimulusEndTime                         // stimulus_end_time
+    );
 }
 
 void NBackTask::startNextTrial()
@@ -361,6 +438,8 @@ void NBackTask::startNextTrial()
 
     // Record start time
     trialStartTime = millis();
+    trialData.stimulusOnsetTime = trialStartTime - dataCollector.getSessionStartTime();
+
     flags.awaitingResponse = true;
     flags.buttonPressed = false; // Reset button press tracking for new trial
 
@@ -405,6 +484,7 @@ void NBackTask::handleButtonPress()
             {
                 // Calculate and store reaction time for this trial
                 trialData.reactionTime = millis() - trialStartTime;
+                trialData.responseTime = millis() - dataCollector.getSessionStartTime();
 
                 // Mark that the button was pressed for this trial
                 flags.buttonPressed = true;

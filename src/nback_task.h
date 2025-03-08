@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+#include "data_collector.h"
 
 // Pin configurations
 #define NEOPIXEL_PIN 6
@@ -26,10 +27,11 @@ enum ColorIndex
 // Task states
 enum TaskState
 {
-    STATE_IDLE,    // Task not running
-    STATE_RUNNING, // Task is running
-    STATE_PAUSED,  // Task is paused
-    STATE_DEBUG    // Debug mode active
+    STATE_IDLE,      // Task not running
+    STATE_RUNNING,   // Task is running
+    STATE_PAUSED,    // Task is paused
+    STATE_DEBUG,     // Debug mode active
+    STATE_DATA_READY // Task complete, data ready to send
 };
 
 // Trial flags
@@ -44,7 +46,10 @@ struct TrialFlags
 // Trial performance data
 struct TrialData
 {
-    unsigned long reactionTime; // Reaction time for this trial if button was pressed
+    unsigned long reactionTime;      // Reaction time for this trial if button was pressed
+    unsigned long stimulusOnsetTime; // When stimulus appeared
+    unsigned long responseTime;      // When response occurred (if any)
+    unsigned long stimulusEndTime;   // When stimulus disappeared
 };
 
 class NBackTask
@@ -109,8 +114,13 @@ private:
     uint32_t colors[COLOR_COUNT]; // Array of color values
     int *colorSequence;           // Array to store color sequence
 
+    // Data collection
+    DataCollector dataCollector; // Data collector for research data
+    char study_id[10];           // Current study ID
+
     // Command processing
     void processSerialCommands();
+    void sendData(); // Send collected data over serial
 
     // State management
     void startTask();

@@ -1,36 +1,60 @@
 #include "nback_task.h"
 
-NBackTask::NBackTask() : pixels(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
-                         nBackLevel(2),
-                         stimulusDuration(1500),
-                         interStimulusInterval(500),
-                         maxTrials(MAX_TRIALS),
-                         numColors(4),
-                         currentTrial(0),
-                         awaitingResponse(false),
-                         targetTrial(false),
-                         paused(false),
-                         taskRunning(false),
-                         correctResponses(0),
-                         falseAlarms(0),
-                         missedTargets(0),
-                         totalReactionTime(0),
-                         reactionTimeCount(0),
-                         lastButtonState(HIGH),
-                         lastDebounceTime(0),
-                         debounceDelay(50),
-                         debugMode(false),
-                         lastColorChangeTime(0),
-                         debugColorIndex(0),
-                         feedbackActive(false),
-                         feedbackStartTime(0)
+//==============================================================================
+// Constructor & Destructor
+//==============================================================================
+
+NBackTask::NBackTask()
+    : pixels(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
+      nBackLevel(2),
+      maxTrials(MAX_TRIALS),
+      state(STATE_IDLE),
+      currentTrial(0),
+      trialStartTime(0),
+      feedbackStartTime(0),
+      debugColorIndex(0),
+      lastColorChangeTime(0),
+      colorSequence(nullptr)
 {
+    // Initialize timing parameters
+    timing.stimulusDuration = 1500;
+    timing.interStimulusInterval = 500;
+    timing.feedbackDuration = 100;
+    timing.debugColorDuration = 1000;
+
+    // Initialize trial flags
+    flags.awaitingResponse = false;
+    flags.targetTrial = false;
+    flags.feedbackActive = false;
+
+    // Initialize button
+    button.lastState = HIGH;
+    button.lastDebounceTime = 0;
+    button.debounceDelay = 50;
+
+    // Reset metrics
+    resetMetrics();
+
     // Initialize the colors array
-    colors[0] = pixels.Color(255, 0, 0);   // Red
-    colors[1] = pixels.Color(0, 255, 0);   // Green
-    colors[2] = pixels.Color(0, 0, 255);   // Blue
-    colors[3] = pixels.Color(255, 255, 0); // Yellow
+    colors[RED] = pixels.Color(255, 0, 0);
+    colors[GREEN] = pixels.Color(0, 255, 0);
+    colors[BLUE] = pixels.Color(0, 0, 255);
+    colors[YELLOW] = pixels.Color(255, 255, 0);
 }
+
+NBackTask::~NBackTask()
+{
+    // Free dynamic memory
+    if (colorSequence != nullptr)
+    {
+        delete[] colorSequence;
+        colorSequence = nullptr;
+    }
+}
+
+//==============================================================================
+// Main Interface Functions
+//==============================================================================
 
 void NBackTask::setup()
 {
@@ -44,12 +68,12 @@ void NBackTask::setup()
 
     // Initialize serial communication
     Serial.begin(9600);
-    Serial.println("N-Back Task");
-    Serial.println("Commands:");
-    Serial.println("- 'debug' to enter debug mode and test hardware");
-    Serial.println("- 'start' to begin task");
-    Serial.println("- 'pause' to pause/resume task");
-    Serial.println("- 'level X' to set N-back level");
+    Serial.println(F("N-Back Task"));
+    Serial.println(F("Commands:"));
+    Serial.println(F("- 'debug' to enter debug mode and test hardware"));
+    Serial.println(F("- 'start' to begin task"));
+    Serial.println(F("- 'pause' to pause/resume task"));
+    Serial.println(F("- 'level X' to set N-back level"));
 
     // Allocate memory for color sequence
     colorSequence = new int[maxTrials];
@@ -63,79 +87,40 @@ void NBackTask::loop()
     // Process any serial commands
     processSerialCommands();
 
-    // Handle debug mode
-    if (debugMode)
+    // Handle tasks based on current state
+    switch (state)
     {
+    case STATE_DEBUG:
         runDebugMode();
-        return;
+        break;
+
+    case STATE_PAUSED:
+        // Do nothing when paused
+        break;
+
+    case STATE_RUNNING:
+        // Check if we need to end visual feedback
+        handleVisualFeedback(false);
+
+        // If not in feedback, manage trials
+        if (!flags.feedbackActive)
+        {
+            manageTrials();
+        }
+
+        // Always check for button press
+        handleButtonPress();
+        break;
+
+    case STATE_IDLE:
+        // Nothing to do in idle state
+        break;
     }
-
-    // If task is paused, do nothing else
-    if (paused)
-    {
-        return;
-    }
-
-    // Check if we need to end visual feedback
-    handleVisualFeedback(false);
-
-    // If task is running, manage the trials
-    if (taskRunning)
-    {
-        manageTrials();
-    }
-
-    // Always handle button press
-    evaluateButtonState();
 }
 
-void NBackTask::handleVisualFeedback(boolean startFeedback)
-{
-    if (startFeedback)
-    {
-        // Start/restart visual feedback
-        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
-        pixels.show();
-        feedbackActive = true;
-        feedbackStartTime = millis();
-        return;
-    }
-
-    // If not starting feedback, check if we need to end it
-    if (feedbackActive && (millis() - feedbackStartTime > feedbackDuration))
-    {
-        // End the feedback flash
-        feedbackActive = false;
-
-        if (debugMode)
-        {
-            // In debug mode, return to the current color
-            pixels.setPixelColor(0, colors[debugColorIndex]);
-            pixels.show();
-        }
-        else if (taskRunning)
-        {
-            // In task mode, turn off the pixel
-            pixels.clear();
-            pixels.show();
-
-            // Then proceed to next trial after inter-stimulus interval
-            if (currentTrial < maxTrials - 1)
-            {
-                currentTrial++;
-                // We use a small delay here for the inter-stimulus interval
-                // This could also be made non-blocking if needed
-                delay(interStimulusInterval);
-                startNextTrial();
-            }
-            else
-            {
-                // End of task
-                endTask();
-            }
-        }
-    }
-}
+//==============================================================================
+// Command Processing
+//==============================================================================
 
 void NBackTask::processSerialCommands()
 {
@@ -146,19 +131,20 @@ void NBackTask::processSerialCommands()
 
         if (command == "start")
         {
-            if (debugMode)
+            if (state == STATE_DEBUG)
             {
-                debugMode = false;
+                Serial.println(F("Exiting debug mode"));
                 pixels.clear();
                 pixels.show();
-                Serial.println("Exiting debug mode");
             }
             startTask();
         }
         else if (command == "pause")
         {
-            paused = !paused;
-            Serial.println(paused ? "Task paused" : "Task resumed");
+            if (state == STATE_RUNNING || state == STATE_PAUSED)
+            {
+                pauseTask(state != STATE_PAUSED);
+            }
         }
         else if (command.startsWith("level "))
         {
@@ -166,48 +152,41 @@ void NBackTask::processSerialCommands()
             if (newLevel > 0)
             {
                 nBackLevel = newLevel;
-                Serial.print("N-back level set to: ");
+                Serial.print(F("N-back level set to: "));
                 Serial.println(nBackLevel);
-                generateSequence(); // Regenerate sequence with new targets
+                generateSequence();
             }
         }
         else if (command == "debug")
         {
-            // Enter debug mode
-            debugMode = true;
-            taskRunning = false;
-            paused = false;
-            debugColorIndex = 0;
-            lastColorChangeTime = millis();
-            Serial.println("*** DEBUG MODE ***");
-            Serial.println("Testing NeoPixel and button. NeoPixel will cycle through colors.");
-            Serial.println("Press the button to test it. Send 'start' to exit debug mode.");
-            // Show first color
-            pixels.setPixelColor(0, colors[debugColorIndex]);
-            pixels.show();
+            enterDebugMode();
         }
     }
 }
 
+//==============================================================================
+// State Management
+//==============================================================================
+
 void NBackTask::startTask()
 {
-    // Reset all metrics
+    // Reset performance metrics
+    resetMetrics();
+
+    // Reset trial state
     currentTrial = 0;
-    correctResponses = 0;
-    falseAlarms = 0;
-    missedTargets = 0;
-    totalReactionTime = 0;
-    reactionTimeCount = 0;
+    flags.awaitingResponse = false;
+    flags.targetTrial = false;
+    flags.feedbackActive = false;
 
     // Generate a new sequence
     generateSequence();
 
     // Start the task
-    taskRunning = true;
-    paused = false;
+    state = STATE_RUNNING;
 
-    Serial.println("Task started");
-    Serial.print("N-back level: ");
+    Serial.println(F("Task started"));
+    Serial.print(F("N-back level: "));
     Serial.println(nBackLevel);
 
     // Start first trial
@@ -217,14 +196,14 @@ void NBackTask::startTask()
 void NBackTask::generateSequence()
 {
     // Generate random sequence with controlled number of targets
-    randomSeed(analogRead(A0)); // Use unconnected analog pin for true randomness
+    randomSeed(analogRead(A0));
 
     int targetCount = maxTrials / 4; // Aim for 25% targets
 
     // First fill with random colors
     for (int i = 0; i < maxTrials; i++)
     {
-        colorSequence[i] = random(numColors);
+        colorSequence[i] = random(COLOR_COUNT);
     }
 
     // Then ensure we have target trials after position n
@@ -238,40 +217,83 @@ void NBackTask::generateSequence()
     }
 
     // Debug: print sequence
-    Serial.println("Sequence generated:");
+    Serial.println(F("Sequence generated:"));
     for (int i = 0; i < maxTrials; i++)
     {
         Serial.print(colorSequence[i]);
         if (i >= nBackLevel && colorSequence[i] == colorSequence[i - nBackLevel])
         {
-            Serial.print("*"); // Mark targets
+            Serial.print(F("*")); // Mark targets
         }
-        Serial.print(" ");
+        Serial.print(F(" "));
     }
     Serial.println();
 }
 
+void NBackTask::pauseTask(bool pause)
+{
+    state = pause ? STATE_PAUSED : STATE_RUNNING;
+    Serial.println(pause ? F("Task paused") : F("Task resumed"));
+}
+
+void NBackTask::enterDebugMode()
+{
+    // Enter debug mode
+    state = STATE_DEBUG;
+    debugColorIndex = 0;
+    lastColorChangeTime = millis();
+    flags.feedbackActive = false;
+
+    Serial.println(F("*** DEBUG MODE ***"));
+    Serial.println(F("Testing NeoPixel and button. NeoPixel will cycle through colors."));
+    Serial.println(F("Press the button to test it. Send 'start' to exit debug mode."));
+
+    // Show first color
+    setNeoPixelColor(debugColorIndex);
+}
+
+void NBackTask::endTask()
+{
+    state = STATE_IDLE;
+    pixels.clear();
+    pixels.show();
+
+    reportResults();
+
+    Serial.println(F("Send 'start' to begin a new session or 'debug' to test hardware"));
+}
+
+//==============================================================================
+// Trial Management
+//==============================================================================
+
 void NBackTask::manageTrials()
 {
+    // Only manage trials when awaiting response
+    if (!flags.awaitingResponse)
+    {
+        return;
+    }
+
     unsigned long currentTime = millis();
 
-    // If we're awaiting a response and the stimulus duration has passed
-    if (awaitingResponse && (currentTime - trialStartTime > stimulusDuration))
+    // If stimulus duration has passed
+    if (currentTime - trialStartTime > timing.stimulusDuration)
     {
         // Turn off the pixel
         pixels.clear();
         pixels.show();
-        awaitingResponse = false;
+        flags.awaitingResponse = false;
 
         // If it was a target trial and user didn't respond, count as missed
-        if (targetTrial && currentTrial > nBackLevel)
+        if (flags.targetTrial && currentTrial >= nBackLevel)
         {
-            missedTargets++;
-            Serial.println("MISSED TARGET!");
+            metrics.missedTargets++;
+            Serial.println(F("MISSED TARGET!"));
         }
 
         // Wait for the inter-stimulus interval
-        delay(interStimulusInterval);
+        delay(timing.interStimulusInterval);
 
         // Move to next trial if not at the end
         if (currentTrial < maxTrials - 1)
@@ -290,25 +312,24 @@ void NBackTask::manageTrials()
 void NBackTask::startNextTrial()
 {
     // Display the current color
-    pixels.setPixelColor(0, colors[colorSequence[currentTrial]]);
-    pixels.show();
+    setNeoPixelColor(colorSequence[currentTrial]);
 
     // Record start time
     trialStartTime = millis();
-    awaitingResponse = true;
+    flags.awaitingResponse = true;
 
     // Check if this is a target trial (n-back match)
-    targetTrial = (currentTrial >= nBackLevel) &&
-                  (colorSequence[currentTrial] == colorSequence[currentTrial - nBackLevel]);
+    flags.targetTrial = (currentTrial >= nBackLevel) &&
+                        (colorSequence[currentTrial] == colorSequence[currentTrial - nBackLevel]);
 
     // Debug info
-    Serial.print("Trial ");
+    Serial.print(F("Trial "));
     Serial.print(currentTrial + 1);
-    Serial.print(": Color ");
+    Serial.print(F(": Color "));
     Serial.print(colorSequence[currentTrial]);
-    if (targetTrial)
+    if (flags.targetTrial)
     {
-        Serial.println(" (TARGET)");
+        Serial.println(F(" (TARGET)"));
     }
     else
     {
@@ -316,10 +337,10 @@ void NBackTask::startNextTrial()
     }
 }
 
-void NBackTask::evaluateButtonState()
+void NBackTask::handleButtonPress()
 {
-    // Skip if in debug mode - debug mode handles its own button detection
-    if (debugMode)
+    // Only process button in running state and not during feedback
+    if (state != STATE_RUNNING || flags.feedbackActive)
     {
         return;
     }
@@ -328,97 +349,160 @@ void NBackTask::evaluateButtonState()
     int reading = digitalRead(BUTTON_PIN);
 
     // If sufficient time has passed since the last bounce
-    if ((millis() - lastDebounceTime) > debounceDelay)
+    if ((millis() - button.lastDebounceTime) > button.debounceDelay)
     {
         // Button press detected (LOW due to pull-up resistor)
-        if (reading == LOW && lastButtonState == HIGH)
+        if (reading == LOW && button.lastState == HIGH && flags.awaitingResponse)
         {
-            // Only handle task-related button presses here
-            if (taskRunning)
-            {
-                // Task is running and we're in the response window
-                handleTaskButtonPress();
-            }
+            // Calculate reaction time
+            unsigned long reactionTime = millis() - trialStartTime;
+
+            // Start visual feedback
+            handleVisualFeedback(true);
+
+            // Process the response
+            handleTaskResponse(reactionTime);
         }
     }
 
     // Debounce logic
-    if (reading != lastButtonState)
+    if (reading != button.lastState)
     {
-        lastDebounceTime = millis();
+        button.lastDebounceTime = millis();
     }
 
     // Update button state
-    lastButtonState = reading;
+    button.lastState = reading;
 }
 
-void NBackTask::handleTaskButtonPress()
+void NBackTask::handleTaskResponse(unsigned long reactionTime)
 {
-    // Calculate reaction time
-    reactionTime = millis() - trialStartTime;
-
-    // Start visual feedback (non-blocking)
-    handleVisualFeedback(true);
-
     // Check if this is a correct response (target trial)
-    if (targetTrial && currentTrial >= nBackLevel)
+    if (flags.targetTrial && currentTrial >= nBackLevel)
     {
-        correctResponses++;
-        totalReactionTime += reactionTime;
-        reactionTimeCount++;
+        metrics.correctResponses++;
+        metrics.totalReactionTime += reactionTime;
+        metrics.reactionTimeCount++;
 
-        Serial.print("CORRECT! Reaction time: ");
+        Serial.print(F("CORRECT! Reaction time: "));
         Serial.print(reactionTime);
-        Serial.println(" ms");
+        Serial.println(F(" ms"));
     }
     else
     {
         // False alarm
-        falseAlarms++;
-        Serial.println("FALSE ALARM!");
+        metrics.falseAlarms++;
+        Serial.println(F("FALSE ALARM!"));
     }
 
     // Set state to not awaiting response
-    awaitingResponse = false;
-
-    // Note: The transition to next trial will happen in handleVisualFeedback
+    flags.awaitingResponse = false;
 }
+
+//==============================================================================
+// Visual Feedback
+//==============================================================================
+
+void NBackTask::handleVisualFeedback(boolean startFeedback)
+{
+    if (startFeedback)
+    {
+        // Start/restart visual feedback with white flash
+        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        pixels.show();
+        flags.feedbackActive = true;
+        feedbackStartTime = millis();
+        return;
+    }
+
+    // If not starting feedback, check if we need to end it
+    if (flags.feedbackActive && (millis() - feedbackStartTime > timing.feedbackDuration))
+    {
+        // End the feedback flash
+        flags.feedbackActive = false;
+
+        if (state == STATE_DEBUG)
+        {
+            // In debug mode, return to the current color
+            setNeoPixelColor(debugColorIndex);
+        }
+        else if (state == STATE_RUNNING)
+        {
+            // In task mode, turn off the pixel
+            pixels.clear();
+            pixels.show();
+
+            // Then proceed to next trial after inter-stimulus interval
+            if (currentTrial < maxTrials - 1)
+            {
+                currentTrial++;
+                // We use a small delay here for the inter-stimulus interval
+                delay(timing.interStimulusInterval);
+                startNextTrial();
+            }
+            else
+            {
+                // End of task
+                endTask();
+            }
+        }
+    }
+}
+
+void NBackTask::setNeoPixelColor(int colorIndex)
+{
+    if (colorIndex >= 0 && colorIndex < COLOR_COUNT)
+    {
+        pixels.setPixelColor(0, colors[colorIndex]);
+        pixels.show();
+    }
+    else if (colorIndex == WHITE)
+    {
+        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        pixels.show();
+    }
+}
+
+//==============================================================================
+// Debug Mode
+//==============================================================================
 
 void NBackTask::runDebugMode()
 {
-    unsigned long currentTime = millis();
-
-    // Handle visual feedback if active (check for ending it)
+    // Handle visual feedback if active
     handleVisualFeedback(false);
 
     // If feedback is active, don't do other debug operations
-    if (feedbackActive)
+    if (flags.feedbackActive)
     {
         return;
     }
 
-    // Cycle through colors automatically
-    if (currentTime - lastColorChangeTime > debugColorDuration)
-    {
-        debugColorIndex = (debugColorIndex + 1) % numColors;
-        pixels.setPixelColor(0, colors[debugColorIndex]);
-        pixels.show();
+    unsigned long currentTime = millis();
 
-        Serial.print("Debug: Showing color ");
+    // Cycle through colors automatically
+    if (currentTime - lastColorChangeTime > timing.debugColorDuration)
+    {
+        debugColorIndex = (debugColorIndex + 1) % COLOR_COUNT;
+        setNeoPixelColor(debugColorIndex);
+
+        Serial.print(F("Debug: Showing color "));
         Serial.print(debugColorIndex);
+
+        // Translate color index to name
         switch (debugColorIndex)
         {
-        case 0:
-            Serial.println(" (RED)");
+        case RED:
+            Serial.println(F(" (RED)"));
             break;
-        case 1:
-            Serial.println(" (GREEN)");
+        case GREEN:
+            Serial.println(F(" (GREEN)"));
             break;
-        case 2:
-            Serial.println(" (BLUE)");
+        case BLUE:
+            Serial.println(F(" (BLUE)"));
             break;
-        case 3:
-            Serial.println(" (YELLOW)");
+        case YELLOW:
+            Serial.println(F(" (YELLOW)"));
             break;
         default:
             Serial.println();
@@ -428,17 +512,16 @@ void NBackTask::runDebugMode()
         lastColorChangeTime = currentTime;
     }
 
-    // Read button state directly in debug mode to ensure responsive detection
+    // Read button state
     int reading = digitalRead(BUTTON_PIN);
 
     // If sufficient time has passed since the last bounce
-    if ((millis() - lastDebounceTime) > debounceDelay)
+    if ((millis() - button.lastDebounceTime) > button.debounceDelay)
     {
         // Button press detected (LOW due to pull-up resistor)
-        if (reading == LOW && lastButtonState == HIGH)
+        if (reading == LOW && button.lastState == HIGH)
         {
-            // Button pressed in debug mode
-            Serial.println("Debug: BUTTON PRESSED!");
+            Serial.println(F("Debug: BUTTON PRESSED!"));
 
             // Start visual feedback (non-blocking)
             handleVisualFeedback(true);
@@ -446,46 +529,54 @@ void NBackTask::runDebugMode()
     }
 
     // Debounce logic
-    if (reading != lastButtonState)
+    if (reading != button.lastState)
     {
-        lastDebounceTime = millis();
+        button.lastDebounceTime = millis();
     }
 
     // Update button state
-    lastButtonState = reading;
+    button.lastState = reading;
 }
 
-void NBackTask::endTask()
-{
-    taskRunning = false;
-    pixels.clear();
-    pixels.show();
+//==============================================================================
+// Utility Functions
+//==============================================================================
 
+void NBackTask::resetMetrics()
+{
+    metrics.correctResponses = 0;
+    metrics.falseAlarms = 0;
+    metrics.missedTargets = 0;
+    metrics.totalReactionTime = 0;
+    metrics.reactionTimeCount = 0;
+}
+
+void NBackTask::reportResults()
+{
     // Calculate performance metrics
-    int totalTargets = correctResponses + missedTargets;
-    float hitRate = (totalTargets > 0) ? (float)correctResponses / totalTargets * 100.0 : 0;
-    float averageRT = (reactionTimeCount > 0) ? (float)totalReactionTime / reactionTimeCount : 0;
+    int totalTargets = metrics.correctResponses + metrics.missedTargets;
+    float hitRate = (totalTargets > 0) ? (float)metrics.correctResponses / totalTargets * 100.0 : 0;
+    float averageRT = (metrics.reactionTimeCount > 0) ? (float)metrics.totalReactionTime / metrics.reactionTimeCount : 0;
 
     // Report results
-    Serial.println("\n=== TASK COMPLETE ===");
-    Serial.print("N-Back Level: ");
+    Serial.println(F("\n=== TASK COMPLETE ==="));
+    Serial.print(F("N-Back Level: "));
     Serial.println(nBackLevel);
-    Serial.print("Total Trials: ");
+    Serial.print(F("Total Trials: "));
     Serial.println(maxTrials);
-    Serial.print("Total Targets: ");
+    Serial.print(F("Total Targets: "));
     Serial.println(totalTargets);
-    Serial.print("Correct Responses: ");
-    Serial.println(correctResponses);
-    Serial.print("False Alarms: ");
-    Serial.println(falseAlarms);
-    Serial.print("Missed Targets: ");
-    Serial.println(missedTargets);
-    Serial.print("Hit Rate: ");
+    Serial.print(F("Correct Responses: "));
+    Serial.println(metrics.correctResponses);
+    Serial.print(F("False Alarms: "));
+    Serial.println(metrics.falseAlarms);
+    Serial.print(F("Missed Targets: "));
+    Serial.println(metrics.missedTargets);
+    Serial.print(F("Hit Rate: "));
     Serial.print(hitRate);
-    Serial.println("%");
-    Serial.print("Average Reaction Time: ");
+    Serial.println(F("%"));
+    Serial.print(F("Average Reaction Time: "));
     Serial.print(averageRT);
-    Serial.println(" ms");
-    Serial.println("======================");
-    Serial.println("Send 'start' to begin a new session or 'debug' to test hardware");
+    Serial.println(F(" ms"));
+    Serial.println(F("======================"));
 }

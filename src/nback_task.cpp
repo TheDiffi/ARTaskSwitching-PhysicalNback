@@ -362,6 +362,10 @@ void NBackTask::handleButtonPress()
 
             // Process the response
             handleTaskResponse(reactionTime);
+
+            // The color will continue cycling as normal
+            // awaitingResponse remains true
+            // When feedback ends, we return to the current color
         }
     }
 
@@ -395,8 +399,8 @@ void NBackTask::handleTaskResponse(unsigned long reactionTime)
         Serial.println(F("FALSE ALARM!"));
     }
 
-    // Set state to not awaiting response
-    flags.awaitingResponse = false;
+    // Note: We no longer set awaitingResponse to false here
+    // The stimulus will continue to be shown until its duration expires
 }
 
 //==============================================================================
@@ -428,22 +432,16 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
         }
         else if (state == STATE_RUNNING)
         {
-            // In task mode, turn off the pixel
-            pixels.clear();
-            pixels.show();
-
-            // Then proceed to next trial after inter-stimulus interval
-            if (currentTrial < maxTrials - 1)
+            // In task mode, return to the current color if still in stimulus duration
+            // or turn off the pixel if the stimulus duration has passed
+            if (millis() - trialStartTime < timing.stimulusDuration)
             {
-                currentTrial++;
-                // We use a small delay here for the inter-stimulus interval
-                delay(timing.interStimulusInterval);
-                startNextTrial();
+                setNeoPixelColor(colorSequence[currentTrial]);
             }
             else
             {
-                // End of task
-                endTask();
+                pixels.clear();
+                pixels.show();
             }
         }
     }

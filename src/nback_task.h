@@ -32,6 +32,7 @@ public:
     void startNextTrial();
     void evaluateButtonState();
     void handleTaskButtonPress();
+    void handleVisualFeedback(boolean startFeedback);
     void runDebugMode();
     void endTask();
 
@@ -75,7 +76,12 @@ private:
     boolean debugMode;
     unsigned long lastColorChangeTime;
     int debugColorIndex;
-    const int debugColorDuration = 10000; // 1 second per color in debug mode
+    const int debugColorDuration = 1000; // 1 second per color in debug mode
+
+    // Variables for non-blocking visual feedback
+    boolean feedbackActive;
+    unsigned long feedbackStartTime;
+    const unsigned long feedbackDuration = 100; // Flash duration in ms
 };
 
 #endif // NBACK_TASK_H

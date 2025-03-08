@@ -1,28 +1,29 @@
 #include "nback_task.h"
 
-NBackTask::NBackTask()
-    : pixels(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
-      nBackLevel(2),
-      stimulusDuration(1500),
-      interStimulusInterval(500),
-      maxTrials(MAX_TRIALS),
-      numColors(4),
-      currentTrial(0),
-      awaitingResponse(false),
-      targetTrial(false),
-      paused(false),
-      taskRunning(false),
-      correctResponses(0),
-      falseAlarms(0),
-      missedTargets(0),
-      totalReactionTime(0),
-      reactionTimeCount(0),
-      lastButtonState(HIGH),
-      lastDebounceTime(0),
-      debounceDelay(50),
-      debugMode(false),
-      lastColorChangeTime(0),
-      debugColorIndex(0)
+NBackTask::NBackTask() : pixels(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
+                         nBackLevel(2),
+                         stimulusDuration(1500),
+                         interStimulusInterval(500),
+                         maxTrials(MAX_TRIALS),
+                         numColors(4),
+                         currentTrial(0),
+                         awaitingResponse(false),
+                         targetTrial(false),
+                         paused(false),
+                         taskRunning(false),
+                         correctResponses(0),
+                         falseAlarms(0),
+                         missedTargets(0),
+                         totalReactionTime(0),
+                         reactionTimeCount(0),
+                         lastButtonState(HIGH),
+                         lastDebounceTime(0),
+                         debounceDelay(50),
+                         debugMode(false),
+                         lastColorChangeTime(0),
+                         debugColorIndex(0),
+                         feedbackActive(false),
+                         feedbackStartTime(0)
 {
     // Initialize the colors array
     colors[0] = pixels.Color(255, 0, 0);   // Red
@@ -75,6 +76,9 @@ void NBackTask::loop()
         return;
     }
 
+    // Check if we need to end visual feedback
+    handleVisualFeedback(false);
+
     // If task is running, manage the trials
     if (taskRunning)
     {
@@ -83,6 +87,54 @@ void NBackTask::loop()
 
     // Always handle button press
     evaluateButtonState();
+}
+
+void NBackTask::handleVisualFeedback(boolean startFeedback)
+{
+    if (startFeedback)
+    {
+        // Start/restart visual feedback
+        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        pixels.show();
+        feedbackActive = true;
+        feedbackStartTime = millis();
+        return;
+    }
+
+    // If not starting feedback, check if we need to end it
+    if (feedbackActive && (millis() - feedbackStartTime > feedbackDuration))
+    {
+        // End the feedback flash
+        feedbackActive = false;
+
+        if (debugMode)
+        {
+            // In debug mode, return to the current color
+            pixels.setPixelColor(0, colors[debugColorIndex]);
+            pixels.show();
+        }
+        else if (taskRunning)
+        {
+            // In task mode, turn off the pixel
+            pixels.clear();
+            pixels.show();
+
+            // Then proceed to next trial after inter-stimulus interval
+            if (currentTrial < maxTrials - 1)
+            {
+                currentTrial++;
+                // We use a small delay here for the inter-stimulus interval
+                // This could also be made non-blocking if needed
+                delay(interStimulusInterval);
+                startNextTrial();
+            }
+            else
+            {
+                // End of task
+                endTask();
+            }
+        }
+    }
 }
 
 void NBackTask::processSerialCommands()
@@ -305,6 +357,9 @@ void NBackTask::handleTaskButtonPress()
     // Calculate reaction time
     reactionTime = millis() - trialStartTime;
 
+    // Start visual feedback (non-blocking)
+    handleVisualFeedback(true);
+
     // Check if this is a correct response (target trial)
     if (targetTrial && currentTrial >= nBackLevel)
     {
@@ -323,30 +378,24 @@ void NBackTask::handleTaskButtonPress()
         Serial.println("FALSE ALARM!");
     }
 
-    // Turn off the pixel immediately after response
-    pixels.clear();
-    pixels.show();
+    // Set state to not awaiting response
     awaitingResponse = false;
 
-    // Wait for the inter-stimulus interval
-    delay(interStimulusInterval);
-
-    // Move to next trial if not at the end
-    if (currentTrial < maxTrials - 1)
-    {
-        currentTrial++;
-        startNextTrial();
-    }
-    else
-    {
-        // End of task
-        endTask();
-    }
+    // Note: The transition to next trial will happen in handleVisualFeedback
 }
 
 void NBackTask::runDebugMode()
 {
     unsigned long currentTime = millis();
+
+    // Handle visual feedback if active (check for ending it)
+    handleVisualFeedback(false);
+
+    // If feedback is active, don't do other debug operations
+    if (feedbackActive)
+    {
+        return;
+    }
 
     // Cycle through colors automatically
     if (currentTime - lastColorChangeTime > debugColorDuration)
@@ -391,14 +440,8 @@ void NBackTask::runDebugMode()
             // Button pressed in debug mode
             Serial.println("Debug: BUTTON PRESSED!");
 
-            // Visual feedback - briefly flash white
-            pixels.setPixelColor(0, pixels.Color(255, 255, 255));
-            pixels.show();
-            delay(200);
-
-            // Return to current color
-            pixels.setPixelColor(0, colors[debugColorIndex]);
-            pixels.show();
+            // Start visual feedback (non-blocking)
+            handleVisualFeedback(true);
         }
     }
 

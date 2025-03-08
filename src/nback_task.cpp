@@ -194,78 +194,54 @@ void NBackTask::processSerialCommands()
 
 void NBackTask::processConfigCommand(const String &command)
 {
-    // Parse configuration parameters: stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number
+    // Parse configuration parameters
     String configStr = command.substring(7);
 
-    // Split the string by commas
-    int paramCount = 0;
-    uint16_t stimDuration = 0;
-    uint16_t interStimInt = 0;
-    uint8_t nBackLvl = 0;
-    uint8_t numTrials = 0;
-    char studyId[10] = {0};
-    uint16_t sessionNum = 0;
+    // Variables to store parsed values
+    uint16_t params[4] = {0}; // For numeric parameters: stimulus duration, ISI, n-back level, trials
+    char studyId[10] = {0};   // For study ID
+    uint16_t sessionNum = 0;  // For session number
 
-    // Parse the comma-separated values
-    int commaPos = configStr.indexOf(',');
-    if (commaPos > 0)
+    // Parse comma-separated values using a more streamlined approach
+    int paramIndex = 0;
+    int startPos = 0;
+    int commaPos = -1;
+
+    // Extract each parameter one by one
+    while (paramIndex < 6 && (commaPos = configStr.indexOf(',', startPos)) != -1)
     {
-        // 1. Stimulus Duration
-        stimDuration = configStr.substring(0, commaPos).toInt();
-        configStr = configStr.substring(commaPos + 1);
-        paramCount++;
-
-        commaPos = configStr.indexOf(',');
-        if (commaPos > 0)
+        if (paramIndex < 4)
         {
-            // 2. Inter-Stimulus Interval
-            interStimInt = configStr.substring(0, commaPos).toInt();
-            configStr = configStr.substring(commaPos + 1);
-            paramCount++;
-
-            commaPos = configStr.indexOf(',');
-            if (commaPos > 0)
-            {
-                // 3. N-back Level
-                nBackLvl = configStr.substring(0, commaPos).toInt();
-                configStr = configStr.substring(commaPos + 1);
-                paramCount++;
-
-                commaPos = configStr.indexOf(',');
-                if (commaPos > 0)
-                {
-                    // 4. Number of Trials
-                    numTrials = configStr.substring(0, commaPos).toInt();
-                    configStr = configStr.substring(commaPos + 1);
-                    paramCount++;
-
-                    commaPos = configStr.indexOf(',');
-                    if (commaPos > 0)
-                    {
-                        // 5. Study ID
-                        configStr.substring(0, commaPos).toCharArray(studyId, sizeof(studyId));
-                        configStr = configStr.substring(commaPos + 1);
-                        paramCount++;
-
-                        // 6. Session Number
-                        sessionNum = configStr.toInt();
-                        paramCount++;
-                    }
-                }
-            }
+            // First 4 parameters are numeric
+            params[paramIndex] = configStr.substring(startPos, commaPos).toInt();
         }
+        else if (paramIndex == 4)
+        {
+            // 5th parameter is the study ID
+            configStr.substring(startPos, commaPos).toCharArray(studyId, sizeof(studyId));
+        }
+        startPos = commaPos + 1;
+        paramIndex++;
     }
 
-    // Apply configuration if all parameters were parsed
-    if (paramCount == 6)
+    // Last parameter (no comma after it)
+    if (paramIndex == 5 && startPos < configStr.length())
     {
-        if (configure(stimDuration, interStimInt, nBackLvl, numTrials, studyId, sessionNum))
+        // Last parameter is session number
+        sessionNum = configStr.substring(startPos).toInt();
+        paramIndex++;
+    }
+
+    // Apply configuration if all 6 parameters were found
+    if (paramIndex == 6)
+    {
+        if (configure(params[0], params[1], params[2], params[3], studyId, sessionNum))
         {
             Serial.println(F("Configuration applied successfully"));
         }
         else
         {
-            Serial.println(F("Failed to apply configuration"));
+            Serial.println(F("Failed to apply configuration - invalid parameters"));
         }
     }
     else
@@ -703,24 +679,22 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
         // End the feedback flash
         flags.feedbackActive = false;
 
+        // Restore appropriate display based on current state
         if (state == STATE_DEBUG)
         {
             // In debug mode, return to the current color
             setNeoPixelColor(debugColorIndex);
         }
-        else if (state == STATE_RUNNING)
+        else if (state == STATE_RUNNING && flags.awaitingResponse)
         {
-            // In task mode, return to the current color if still in stimulus duration
-            // or turn off the pixel if the stimulus duration has passed
-            if (millis() - trialStartTime < timing.stimulusDuration)
-            {
-                setNeoPixelColor(colorSequence[currentTrial]);
-            }
-            else
-            {
-                pixels.clear();
-                pixels.show();
-            }
+            // In task mode during stimulus, show the current color
+            setNeoPixelColor(colorSequence[currentTrial]);
+        }
+        else
+        {
+            // Otherwise, turn off the pixel
+            pixels.clear();
+            pixels.show();
         }
     }
 }
@@ -769,24 +743,17 @@ void NBackTask::runDebugMode()
         Serial.print(F("Debug: Showing color "));
         Serial.print(debugColorIndex);
 
-        // Translate color index to name for readability
-        switch (debugColorIndex)
+        // Show color name for readability
+        const char *colorNames[] = {"RED", "GREEN", "BLUE", "YELLOW"};
+        if (debugColorIndex < COLOR_COUNT)
         {
-        case RED:
-            Serial.println(F(" (RED)"));
-            break;
-        case GREEN:
-            Serial.println(F(" (GREEN)"));
-            break;
-        case BLUE:
-            Serial.println(F(" (BLUE)"));
-            break;
-        case YELLOW:
-            Serial.println(F(" (YELLOW)"));
-            break;
-        default:
+            Serial.print(F(" ("));
+            Serial.print(colorNames[debugColorIndex]);
+            Serial.println(F(")"));
+        }
+        else
+        {
             Serial.println();
-            break;
         }
 
         lastColorChangeTime = currentTime;
@@ -834,13 +801,8 @@ void NBackTask::resetMetrics()
 
 void NBackTask::reportResults()
 {
-    // Calculate total number of target trials
     int totalTargets = metrics.correctResponses + metrics.missedTargets;
-
-    // Calculate hit rate (percentage of targets correctly identified)
     float hitRate = (totalTargets > 0) ? (float)metrics.correctResponses / totalTargets * 100.0 : 0;
-
-    // Calculate average reaction time for correct responses only
     float averageRT = (metrics.reactionTimeCount > 0) ? (float)metrics.totalReactionTime / metrics.reactionTimeCount : 0;
 
     // Format timestamp for session duration

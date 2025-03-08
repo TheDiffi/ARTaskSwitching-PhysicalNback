@@ -1,5 +1,9 @@
 #include "data_collector.h"
 
+//==============================================================================
+// Core Interface
+//==============================================================================
+
 DataCollector::DataCollector()
     : session_number(0),
       session_start_time(0),
@@ -77,6 +81,9 @@ void DataCollector::sendDataOverSerial()
     // Start data section
     Serial.println(F("$$$"));
 
+    // Buffer for timestamp formatting
+    char timestampBuffer[16]; // HH:MM:SS:mmm format needs 13 chars + null
+
     // Send each data row
     for (uint8_t i = 0; i < trial_count; i++)
     {
@@ -87,7 +94,11 @@ void DataCollector::sendDataOverSerial()
         Serial.print(F(","));
         Serial.print(session_number);
         Serial.print(F(","));
-        Serial.print(trial.stimulus_end_time); // Use end time as the timestamp
+
+        // Format timestamp as HH:MM:SS:mmm
+        formatTimestamp(trial.stimulus_end_time, timestampBuffer, sizeof(timestampBuffer));
+        Serial.print(timestampBuffer);
+
         Serial.print(F(","));
         Serial.print(F("n-back"));
         Serial.print(F(","));
@@ -125,13 +136,21 @@ void DataCollector::sendDataOverSerial()
         Serial.print(F(","));
         Serial.print(trial.is_correct ? F("true") : F("false"));
         Serial.print(F(","));
-        Serial.print(trial.stimulus_onset_time);
+
+        // Format all time values as HH:MM:SS:mmm
+        formatTimestamp(trial.stimulus_onset_time, timestampBuffer, sizeof(timestampBuffer));
+        Serial.print(timestampBuffer);
         Serial.print(F(","));
-        Serial.print(trial.response_time);
+
+        formatTimestamp(trial.response_time, timestampBuffer, sizeof(timestampBuffer));
+        Serial.print(timestampBuffer);
         Serial.print(F(","));
-        Serial.print(trial.reaction_time);
+
+        Serial.print(trial.reaction_time); // Keep reaction time as raw milliseconds for analysis
         Serial.print(F(","));
-        Serial.print(trial.stimulus_end_time);
+
+        formatTimestamp(trial.stimulus_end_time, timestampBuffer, sizeof(timestampBuffer));
+        Serial.print(timestampBuffer);
 
         Serial.println();
     }
@@ -141,6 +160,10 @@ void DataCollector::sendDataOverSerial()
     Serial.println(F("Closing Data Socket"));
 }
 
+//==============================================================================
+// Accessors
+//==============================================================================
+
 uint8_t DataCollector::getTrialCount() const
 {
     return trial_count;
@@ -149,6 +172,23 @@ uint8_t DataCollector::getTrialCount() const
 uint32_t DataCollector::getSessionStartTime() const
 {
     return session_start_time;
+}
+
+//==============================================================================
+// Utility Functions
+//==============================================================================
+
+void DataCollector::formatTimestamp(uint32_t milliseconds, char *buffer, size_t bufferSize)
+{
+    // Convert milliseconds to hours:minutes:seconds:milliseconds format
+    uint32_t totalSeconds = milliseconds / 1000;
+    uint16_t ms = milliseconds % 1000;
+    uint8_t seconds = totalSeconds % 60;
+    uint8_t minutes = (totalSeconds / 60) % 60;
+    uint8_t hours = (totalSeconds / 3600);
+
+    // Format as HH:MM:SS:mmm
+    snprintf(buffer, bufferSize, "%02d:%02d:%02d:%03d", hours, minutes, seconds, ms);
 }
 
 void DataCollector::printColorName(uint8_t color_index)

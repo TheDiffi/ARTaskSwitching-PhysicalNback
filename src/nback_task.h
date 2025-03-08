@@ -5,144 +5,197 @@
 #include <Adafruit_NeoPixel.h>
 #include "data_collector.h"
 
+//==============================================================================
+// Hardware Configuration
+//==============================================================================
+
 // Pin configurations
-#define NEOPIXEL_PIN 6
-#define BUTTON_PIN 2
-#define NUM_PIXELS 1
+#define NEOPIXEL_PIN 6 // Pin connected to the NeoPixel
+#define BUTTON_PIN 2   // Pin connected to the button
+#define NUM_PIXELS 1   // Number of NeoPixels in the strip
 
-// Task constants
-#define MAX_TRIALS 30
+//==============================================================================
+// Task Parameters
+//==============================================================================
 
-// Color definitions
+// Task constants - default values, can be changed via config command
+#define MAX_TRIALS 30 // Default, can be increased up to 50
+
+//==============================================================================
+// Color Definitions
+//==============================================================================
+
+// Color indices used for the task
 enum ColorIndex
 {
     RED = 0,
     GREEN = 1,
     BLUE = 2,
     YELLOW = 3,
-    COLOR_COUNT = 4,
-    WHITE = 99 // Special case for feedback
+    COLOR_COUNT = 4, // Total number of colors used
+    WHITE = 99       // Special case for visual feedback
 };
 
-// Task states
+//==============================================================================
+// Task State Definitions
+//==============================================================================
+
+// State machine for the task
 enum TaskState
 {
-    STATE_IDLE,      // Task not running
-    STATE_RUNNING,   // Task is running
-    STATE_PAUSED,    // Task is paused
-    STATE_DEBUG,     // Debug mode active
+    STATE_IDLE,      // Task not running, waiting for commands
+    STATE_RUNNING,   // Task is actively running
+    STATE_PAUSED,    // Task is temporarily paused
+    STATE_DEBUG,     // Hardware debug mode active
     STATE_DATA_READY // Task complete, data ready to send
 };
 
-// Trial flags
+//==============================================================================
+// Task-related Structures
+//==============================================================================
+
+// Trial state flags (using bit fields to save memory)
 struct TrialFlags
 {
-    bool awaitingResponse : 1; // If we're in response window
-    bool targetTrial : 1;      // If current trial is a target
-    bool feedbackActive : 1;   // Visual feedback is active
-    bool buttonPressed : 1;    // If the button was pressed during this trial
+    bool awaitingResponse : 1; // Whether currently in response window
+    bool targetTrial : 1;      // Whether current trial is a target
+    bool feedbackActive : 1;   // Whether visual feedback is active
+    bool buttonPressed : 1;    // Whether button was pressed during this trial
 };
 
 // Trial performance data
 struct TrialData
 {
-    unsigned long reactionTime;      // Reaction time for this trial if button was pressed
-    unsigned long stimulusOnsetTime; // When stimulus appeared
-    unsigned long responseTime;      // When response occurred (if any)
-    unsigned long stimulusEndTime;   // When stimulus disappeared
+    unsigned long reactionTime;      // Time between stimulus onset and response
+    unsigned long stimulusOnsetTime; // When stimulus appeared (relative to session start)
+    unsigned long responseTime;      // When response occurred (relative to session start)
+    unsigned long stimulusEndTime;   // When stimulus disappeared (relative to session start)
 };
+
+//==============================================================================
+// Main N-Back Task Class
+//==============================================================================
 
 class NBackTask
 {
 public:
-    // Constructor
+    // Constructor and destructor
     NBackTask();
-
-    // Destructor (to free dynamic memory)
     ~NBackTask();
 
-    // Main interface functions
+    // Main Arduino interface functions
     void setup();
     void loop();
 
+    // Configuration function (public to allow direct configuration)
+    bool configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
+                   uint8_t numTrials, const char *studyId, uint16_t sessionNum);
+
 private:
-    // Timing parameters
+    //--------------------------------------------------------------------------
+    // Timing Parameters
+    //--------------------------------------------------------------------------
     struct
     {
-        uint16_t stimulusDuration;      // Stimulus display time in ms
-        uint16_t interStimulusInterval; // Time between stimuli in ms
-        uint16_t feedbackDuration;      // Duration of visual feedback
-        uint16_t debugColorDuration;    // Duration for each color in debug mode
+        uint16_t stimulusDuration;      // How long each stimulus is shown (ms)
+        uint16_t interStimulusInterval; // Time between stimuli (ms)
+        uint16_t feedbackDuration;      // Duration of visual feedback (ms)
+        uint16_t debugColorDuration;    // Time for each color in debug mode (ms)
     } timing;
 
-    // Task parameters
-    int nBackLevel; // N-back level (default is 2)
+    //--------------------------------------------------------------------------
+    // Task Parameters
+    //--------------------------------------------------------------------------
+    int nBackLevel; // N-back level (e.g., 2 for 2-back)
     int maxTrials;  // Total number of trials in a session
 
-    // Task state
+    //--------------------------------------------------------------------------
+    // Task State
+    //--------------------------------------------------------------------------
     TaskState state;                 // Current state of the task
-    int currentTrial;                // Current trial number
-    unsigned long trialStartTime;    // When current trial started
-    unsigned long feedbackStartTime; // When visual feedback started
+    int currentTrial;                // Current trial number (0-based)
+    unsigned long trialStartTime;    // When current trial started (ms)
+    unsigned long feedbackStartTime; // When visual feedback started (ms)
     TrialFlags flags;                // Trial state flags
     TrialData trialData;             // Data for the current trial
 
-    // Button handling
+    //--------------------------------------------------------------------------
+    // Button Handling
+    //--------------------------------------------------------------------------
     struct
     {
-        int lastState;                  // Previous button state
-        unsigned long lastDebounceTime; // Last time button state changed
-        unsigned long debounceDelay;    // Debounce timeout
+        int lastState;                  // Previous button state (HIGH/LOW)
+        unsigned long lastDebounceTime; // Last time button state changed (ms)
+        unsigned long debounceDelay;    // Debounce timeout (ms)
     } button;
 
-    // Debug mode variables
-    unsigned long lastColorChangeTime; // Last time debug color changed
-    int debugColorIndex;               // Current color in debug cycle
+    //--------------------------------------------------------------------------
+    // Debug Mode Variables
+    //--------------------------------------------------------------------------
+    int debugColorIndex;               // Current color index in debug cycle
+    unsigned long lastColorChangeTime; // Last time debug color changed (ms)
 
-    // Performance metrics
+    //--------------------------------------------------------------------------
+    // Performance Metrics
+    //--------------------------------------------------------------------------
     struct
     {
-        int correctResponses;            // Number of correct button presses
-        int falseAlarms;                 // Number of incorrect button presses
-        int missedTargets;               // Number of missed targets
-        unsigned long totalReactionTime; // Sum of all reaction times
+        int correctResponses;            // Number of correct button presses (hits)
+        int falseAlarms;                 // Number of incorrect button presses (false positives)
+        int missedTargets;               // Number of missed targets (false negatives)
+        unsigned long totalReactionTime; // Sum of all correct reaction times (ms)
         int reactionTimeCount;           // Count of measured reaction times
     } metrics;
 
-    // NeoPixel and sequence
-    Adafruit_NeoPixel pixels;     // NeoPixel object
-    uint32_t colors[COLOR_COUNT]; // Array of color values
-    int *colorSequence;           // Array to store color sequence
+    //--------------------------------------------------------------------------
+    // Hardware and Data
+    //--------------------------------------------------------------------------
+    Adafruit_NeoPixel pixels;     // NeoPixel control object
+    uint32_t colors[COLOR_COUNT]; // Array of NeoPixel color values
+    int *colorSequence;           // Dynamically allocated array for color sequence
 
     // Data collection
     DataCollector dataCollector; // Data collector for research data
-    char study_id[10];           // Current study ID
+    char study_id[10];           // Current study identifier
 
-    // Command processing
+    //--------------------------------------------------------------------------
+    // Command Processing Methods
+    //--------------------------------------------------------------------------
     void processSerialCommands();
-    void sendData(); // Send collected data over serial
+    void processConfigCommand(const String &command);
+    void sendData();
 
-    // State management
+    //--------------------------------------------------------------------------
+    // State Management Methods
+    //--------------------------------------------------------------------------
     void startTask();
     void generateSequence();
     void pauseTask(bool pause);
     void enterDebugMode();
     void endTask();
 
-    // Trial management
+    //--------------------------------------------------------------------------
+    // Trial Management Methods
+    //--------------------------------------------------------------------------
     void manageTrials();
     void startNextTrial();
     void handleButtonPress();
     void evaluateTrialOutcome();
 
-    // Visual feedback
+    //--------------------------------------------------------------------------
+    // Visual Feedback Methods
+    //--------------------------------------------------------------------------
     void handleVisualFeedback(boolean startFeedback);
     void setNeoPixelColor(int colorIndex);
 
-    // Debug mode
+    //--------------------------------------------------------------------------
+    // Debug Mode Methods
+    //--------------------------------------------------------------------------
     void runDebugMode();
 
-    // Utility functions
+    //--------------------------------------------------------------------------
+    // Utility Methods
+    //--------------------------------------------------------------------------
     void resetMetrics();
     void reportResults();
 };

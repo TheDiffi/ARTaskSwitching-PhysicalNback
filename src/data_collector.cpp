@@ -7,6 +7,7 @@
 DataCollector::DataCollector()
     : session_number(0),
       session_start_time(0),
+      session_absolute_millis(0),
       trial_count(0)
 {
     // Initialize study_id with empty string
@@ -21,6 +22,7 @@ void DataCollector::begin(const char *study_id, uint16_t session_number)
 
     this->session_number = session_number;
     this->session_start_time = millis();
+    this->session_absolute_millis = millis(); // Store absolute timestamp
     this->trial_count = 0;
 }
 
@@ -74,7 +76,7 @@ void DataCollector::sendDataOverSerial()
     // Following the specified protocol
     Serial.println(F("Opening Data Socket"));
 
-    // Print header format
+    // Print header format for trial data
     Serial.print(F("Format=study_id,session_number,timestamp,task_type,event_type,"));
     Serial.println(F("stimulus_number,stimulus_color,is_target,response_made,is_correct,stimulus_onset_time,response_time,reaction_time,stimulus_end_time"));
 
@@ -155,8 +157,52 @@ void DataCollector::sendDataOverSerial()
         Serial.println();
     }
 
-    // End data section
+    // End trial data section
     Serial.println(F("$$$"));
+
+    // Now add session timing information section
+    Serial.println(F("Format=study_id,session_number,start_time_millis,start_time,completion_time,total_duration,total_trials"));
+
+    // Start session data section
+    Serial.println(F("$$$"));
+
+    // Calculate total completion time
+    uint32_t currentTime = millis();
+    uint32_t totalDuration = currentTime - session_start_time;
+
+    // Format timestamps
+    char startTimeBuffer[16];
+    char completionTimeBuffer[16];
+    char durationBuffer[16];
+
+    // Format absolute start time
+    formatTimestamp(session_absolute_millis, startTimeBuffer, sizeof(startTimeBuffer));
+
+    // Format completion time (absolute)
+    formatTimestamp(currentTime, completionTimeBuffer, sizeof(completionTimeBuffer));
+
+    // Format duration
+    formatTimestamp(totalDuration, durationBuffer, sizeof(durationBuffer));
+
+    // Output session summary line
+    Serial.print(study_id);
+    Serial.print(F(","));
+    Serial.print(session_number);
+    Serial.print(F(","));
+    Serial.print(session_absolute_millis); // Raw milliseconds
+    Serial.print(F(","));
+    Serial.print(startTimeBuffer);
+    Serial.print(F(","));
+    Serial.print(completionTimeBuffer);
+    Serial.print(F(","));
+    Serial.print(durationBuffer);
+    Serial.print(F(","));
+    Serial.println(trial_count);
+
+    // End session data section
+    Serial.println(F("$$$"));
+
+    // Close data socket
     Serial.println(F("Closing Data Socket"));
 }
 
@@ -172,6 +218,11 @@ uint8_t DataCollector::getTrialCount() const
 uint32_t DataCollector::getSessionStartTime() const
 {
     return session_start_time;
+}
+
+uint32_t DataCollector::getSessionAbsoluteStartTime() const
+{
+    return session_absolute_millis;
 }
 
 //==============================================================================

@@ -78,6 +78,9 @@ public:
     // Get session start time (millis() value when begin was called)
     uint32_t getSessionStartTime() const;
 
+    // Get absolute millis() when session started
+    uint32_t getSessionAbsoluteStartTime() const;
+
     //----------------------------------------------------------------------------
     // Utility Functions
     //----------------------------------------------------------------------------
@@ -97,9 +100,10 @@ private:
     //----------------------------------------------------------------------------
 
     // Configuration data
-    char study_id[10];           // Study identifier
-    uint16_t session_number;     // Session number
-    uint32_t session_start_time; // millis() value when session started
+    char study_id[10];                // Study identifier
+    uint16_t session_number;          // Session number
+    uint32_t session_start_time;      // millis() value when session started
+    uint32_t session_absolute_millis; // Absolute millis() when session started
 
     // Data storage
     NBackTrialData trials[MAX_DATA_ROWS];

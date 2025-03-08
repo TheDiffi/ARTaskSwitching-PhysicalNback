@@ -17,8 +17,8 @@ NBackTask::NBackTask()
       colorSequence(nullptr)
 {
     // Initialize timing parameters
-    timing.stimulusDuration = 1500;
-    timing.interStimulusInterval = 500;
+    timing.stimulusDuration = 2000;
+    timing.interStimulusInterval = 2000;
     timing.feedbackDuration = 100;
     timing.debugColorDuration = 1000;
 
@@ -26,6 +26,7 @@ NBackTask::NBackTask()
     flags.awaitingResponse = false;
     flags.targetTrial = false;
     flags.feedbackActive = false;
+    flags.buttonPressed = false;
 
     // Initialize button
     button.lastState = HIGH;
@@ -285,12 +286,8 @@ void NBackTask::manageTrials()
         pixels.show();
         flags.awaitingResponse = false;
 
-        // If it was a target trial and user didn't respond, count as missed
-        if (flags.targetTrial && currentTrial >= nBackLevel)
-        {
-            metrics.missedTargets++;
-            Serial.println(F("MISSED TARGET!"));
-        }
+        // Evaluate the trial outcome at the end
+        evaluateTrialOutcome();
 
         // Wait for the inter-stimulus interval
         delay(timing.interStimulusInterval);
@@ -309,6 +306,54 @@ void NBackTask::manageTrials()
     }
 }
 
+void NBackTask::evaluateTrialOutcome()
+{
+    // Four possible outcomes:
+    // 1. Target trial + button pressed = Correct response
+    // 2. Target trial + no button press = Missed target (false negative)
+    // 3. Non-target trial + button pressed = False alarm (false positive)
+    // 4. Non-target trial + no button press = Correct rejection
+
+    if (flags.targetTrial && currentTrial >= nBackLevel)
+    {
+        // Target trial
+        if (flags.buttonPressed)
+        {
+            // Correct response
+            metrics.correctResponses++;
+
+            // Add reaction time to totals (only for correct responses)
+            metrics.totalReactionTime += trialData.reactionTime;
+            metrics.reactionTimeCount++;
+
+            Serial.println(F("CORRECT RESPONSE!"));
+            Serial.print(F("Reaction time: "));
+            Serial.print(trialData.reactionTime);
+            Serial.println(F(" ms"));
+        }
+        else
+        {
+            // Missed target (false negative)
+            metrics.missedTargets++;
+            Serial.println(F("MISSED TARGET!"));
+        }
+    }
+    else if (flags.buttonPressed)
+    {
+        // False alarm (false positive)
+        metrics.falseAlarms++;
+        Serial.println(F("FALSE ALARM!"));
+        Serial.print(F("Reaction time: "));
+        Serial.print(trialData.reactionTime);
+        Serial.println(F(" ms (not counted in average)"));
+    }
+    else
+    {
+        // Correct rejection (no need to count these, but could add if needed)
+        Serial.println(F("CORRECT REJECTION"));
+    }
+}
+
 void NBackTask::startNextTrial()
 {
     // Display the current color
@@ -317,6 +362,7 @@ void NBackTask::startNextTrial()
     // Record start time
     trialStartTime = millis();
     flags.awaitingResponse = true;
+    flags.buttonPressed = false; // Reset button press tracking for new trial
 
     // Check if this is a target trial (n-back match)
     flags.targetTrial = (currentTrial >= nBackLevel) &&
@@ -354,18 +400,20 @@ void NBackTask::handleButtonPress()
         // Button press detected (LOW due to pull-up resistor)
         if (reading == LOW && button.lastState == HIGH && flags.awaitingResponse)
         {
-            // Calculate reaction time
-            unsigned long reactionTime = millis() - trialStartTime;
+            // Only record reaction time for the first button press
+            if (!flags.buttonPressed)
+            {
+                // Calculate and store reaction time for this trial
+                trialData.reactionTime = millis() - trialStartTime;
 
-            // Start visual feedback
-            handleVisualFeedback(true);
+                // Mark that the button was pressed for this trial
+                flags.buttonPressed = true;
 
-            // Process the response
-            handleTaskResponse(reactionTime);
+                Serial.println(F("Button pressed"));
 
-            // The color will continue cycling as normal
-            // awaitingResponse remains true
-            // When feedback ends, we return to the current color
+                // Always provide visual feedback for button presses
+                handleVisualFeedback(true);
+            }
         }
     }
 
@@ -377,30 +425,6 @@ void NBackTask::handleButtonPress()
 
     // Update button state
     button.lastState = reading;
-}
-
-void NBackTask::handleTaskResponse(unsigned long reactionTime)
-{
-    // Check if this is a correct response (target trial)
-    if (flags.targetTrial && currentTrial >= nBackLevel)
-    {
-        metrics.correctResponses++;
-        metrics.totalReactionTime += reactionTime;
-        metrics.reactionTimeCount++;
-
-        Serial.print(F("CORRECT! Reaction time: "));
-        Serial.print(reactionTime);
-        Serial.println(F(" ms"));
-    }
-    else
-    {
-        // False alarm
-        metrics.falseAlarms++;
-        Serial.println(F("FALSE ALARM!"));
-    }
-
-    // Note: We no longer set awaitingResponse to false here
-    // The stimulus will continue to be shown until its duration expires
 }
 
 //==============================================================================
@@ -554,6 +578,8 @@ void NBackTask::reportResults()
     // Calculate performance metrics
     int totalTargets = metrics.correctResponses + metrics.missedTargets;
     float hitRate = (totalTargets > 0) ? (float)metrics.correctResponses / totalTargets * 100.0 : 0;
+
+    // Calculate average reaction time only from correct responses
     float averageRT = (metrics.reactionTimeCount > 0) ? (float)metrics.totalReactionTime / metrics.reactionTimeCount : 0;
 
     // Report results
@@ -573,7 +599,7 @@ void NBackTask::reportResults()
     Serial.print(F("Hit Rate: "));
     Serial.print(hitRate);
     Serial.println(F("%"));
-    Serial.print(F("Average Reaction Time: "));
+    Serial.print(F("Average Reaction Time (correct responses only): "));
     Serial.print(averageRT);
     Serial.println(F(" ms"));
     Serial.println(F("======================"));

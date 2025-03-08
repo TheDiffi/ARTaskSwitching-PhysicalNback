@@ -38,6 +38,13 @@ struct TrialFlags
     bool awaitingResponse : 1; // If we're in response window
     bool targetTrial : 1;      // If current trial is a target
     bool feedbackActive : 1;   // Visual feedback is active
+    bool buttonPressed : 1;    // If the button was pressed during this trial
+};
+
+// Trial performance data
+struct TrialData
+{
+    unsigned long reactionTime; // Reaction time for this trial if button was pressed
 };
 
 class NBackTask
@@ -73,6 +80,7 @@ private:
     unsigned long trialStartTime;    // When current trial started
     unsigned long feedbackStartTime; // When visual feedback started
     TrialFlags flags;                // Trial state flags
+    TrialData trialData;             // Data for the current trial
 
     // Button handling
     struct
@@ -115,7 +123,7 @@ private:
     void manageTrials();
     void startNextTrial();
     void handleButtonPress();
-    void handleTaskResponse(unsigned long reactionTime);
+    void evaluateTrialOutcome();
 
     // Visual feedback
     void handleVisualFeedback(boolean startFeedback);

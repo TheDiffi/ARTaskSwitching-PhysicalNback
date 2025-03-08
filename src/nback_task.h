@@ -57,10 +57,11 @@ enum TaskState
 // Trial state flags (using bit fields to save memory)
 struct TrialFlags
 {
-    bool awaitingResponse : 1; // Whether currently in response window
-    bool targetTrial : 1;      // Whether current trial is a target
-    bool feedbackActive : 1;   // Whether visual feedback is active
-    bool buttonPressed : 1;    // Whether button was pressed during this trial
+    bool awaitingResponse : 1;        // Whether currently in response window
+    bool targetTrial : 1;             // Whether current trial is a target
+    bool feedbackActive : 1;          // Whether visual feedback is active
+    bool buttonPressed : 1;           // Whether button was pressed during this trial
+    bool inInterStimulusInterval : 1; // Whether we're in the interval between stimuli
 };
 
 // Trial performance data
@@ -115,6 +116,7 @@ private:
     TaskState state;                 // Current state of the task
     int currentTrial;                // Current trial number (0-based)
     unsigned long trialStartTime;    // When current trial started (ms)
+    unsigned long stimulusEndTime;   // When stimulus ended (ms)
     unsigned long feedbackStartTime; // When visual feedback started (ms)
     TrialFlags flags;                // Trial state flags
     TrialData trialData;             // Data for the current trial

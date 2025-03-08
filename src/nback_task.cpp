@@ -11,6 +11,7 @@ NBackTask::NBackTask()
       state(STATE_IDLE),
       currentTrial(0),
       trialStartTime(0),
+      stimulusEndTime(0),
       feedbackStartTime(0),
       debugColorIndex(0),
       lastColorChangeTime(0),
@@ -30,6 +31,7 @@ NBackTask::NBackTask()
     flags.targetTrial = false;
     flags.feedbackActive = false;
     flags.buttonPressed = false;
+    flags.inInterStimulusInterval = false;
 
     // Initialize button debouncing variables
     button.lastState = HIGH;
@@ -85,7 +87,6 @@ void NBackTask::setup()
     Serial.println(F("- 'debug' to enter debug mode and test hardware"));
     Serial.println(F("- 'start' to begin task"));
     Serial.println(F("- 'pause' to pause/resume task"));
-    Serial.println(F("- 'level X' to set N-back level"));
     Serial.println(F("- 'get_data' to retrieve collected data"));
     Serial.println(F("- 'config stimDur,interStimInt,nBackLvl,trials,studyId,sessionNum' to configure all parameters"));
 
@@ -166,18 +167,6 @@ void NBackTask::processSerialCommands()
             if (state == STATE_RUNNING || state == STATE_PAUSED)
             {
                 pauseTask(state != STATE_PAUSED);
-            }
-        }
-        else if (command.startsWith("level "))
-        {
-            // Set N-back level (e.g., "level 3")
-            int newLevel = command.substring(6).toInt();
-            if (newLevel > 0)
-            {
-                nBackLevel = newLevel;
-                Serial.print(F("N-back level set to: "));
-                Serial.println(nBackLevel);
-                generateSequence();
             }
         }
         else if (command == "debug")
@@ -314,6 +303,7 @@ void NBackTask::startTask()
     flags.awaitingResponse = false;
     flags.targetTrial = false;
     flags.feedbackActive = false;
+    flags.inInterStimulusInterval = false;
 
     // Generate a new sequence for this task
     generateSequence();
@@ -497,27 +487,38 @@ bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint
 
 void NBackTask::manageTrials()
 {
-    // Only manage trials when awaiting response
-    if (!flags.awaitingResponse)
+    // Only manage trials when awaiting response or in inter-stimulus interval
+    if (!flags.awaitingResponse && !flags.inInterStimulusInterval)
     {
         return;
     }
 
     unsigned long currentTime = millis();
 
-    // If stimulus duration has passed
-    if (currentTime - trialStartTime > timing.stimulusDuration)
+    // If in response window and stimulus duration has passed
+    if (flags.awaitingResponse && currentTime - trialStartTime > timing.stimulusDuration)
     {
         // Turn off the pixel
         pixels.clear();
         pixels.show();
         flags.awaitingResponse = false;
 
+        // Record when the stimulus ended
+        stimulusEndTime = currentTime;
+
         // Evaluate the trial outcome at the end
         evaluateTrialOutcome();
 
-        // Wait for the inter-stimulus interval
-        delay(timing.interStimulusInterval);
+        // Enter inter-stimulus interval state
+        flags.inInterStimulusInterval = true;
+    }
+
+    // If in inter-stimulus interval and enough time has passed
+    if (flags.inInterStimulusInterval &&
+        currentTime - stimulusEndTime > timing.interStimulusInterval)
+    {
+        // Exit inter-stimulus interval state
+        flags.inInterStimulusInterval = false;
 
         // Move to next trial if not at the end
         if (currentTrial < maxTrials - 1)

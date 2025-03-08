@@ -1,5 +1,18 @@
 #include <Adafruit_NeoPixel.h>
 
+// Function prototypes
+void setup();
+void loop();
+void processSerialCommands();
+void startTask();
+void generateSequence();
+void manageTrials();
+void startNextTrial();
+void evaluateButtonState();
+void handleTaskButtonPress();
+void runDebugMode();
+void endTask();
+
 // Define pins
 #define NEOPIXEL_PIN 6
 #define BUTTON_PIN 2
@@ -47,6 +60,12 @@ int lastButtonState = HIGH; // Default is HIGH due to pull-up
 unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 50;
 
+// Debug mode variables
+boolean debugMode = false;
+unsigned long lastColorChangeTime = 0;
+int debugColorIndex = 0;
+const int debugColorDuration = 1000; // 1 second per color in debug mode
+
 void setup()
 {
   // Initialize NeoPixel
@@ -60,7 +79,11 @@ void setup()
   // Initialize serial communication
   Serial.begin(9600);
   Serial.println("N-Back Task");
-  Serial.println("Commands: 'start' to begin, 'pause' to pause/resume, 'level X' to set N-back level");
+  Serial.println("Commands:");
+  Serial.println("- 'debug' to enter debug mode and test hardware");
+  Serial.println("- 'start' to begin task");
+  Serial.println("- 'pause' to pause/resume task");
+  Serial.println("- 'level X' to set N-back level");
 
   // Allocate memory for color sequence
   colorSequence = new int[maxTrials];
@@ -74,6 +97,13 @@ void loop()
   // Process any serial commands
   processSerialCommands();
 
+  // Handle debug mode
+  if (debugMode)
+  {
+    runDebugMode();
+    return;
+  }
+
   // If task is paused, do nothing else
   if (paused)
   {
@@ -86,8 +116,8 @@ void loop()
     manageTrials();
   }
 
-  // Handle button press
-  handleButtonPress();
+  // Always handle button press
+  evaluateButtonState();
 }
 
 void processSerialCommands()
@@ -99,6 +129,13 @@ void processSerialCommands()
 
     if (command == "start")
     {
+      if (debugMode)
+      {
+        debugMode = false;
+        pixels.clear();
+        pixels.show();
+        Serial.println("Exiting debug mode");
+      }
       startTask();
     }
     else if (command == "pause")
@@ -116,6 +153,21 @@ void processSerialCommands()
         Serial.println(nBackLevel);
         generateSequence(); // Regenerate sequence with new targets
       }
+    }
+    else if (command == "debug")
+    {
+      // Enter debug mode
+      debugMode = true;
+      taskRunning = false;
+      paused = false;
+      debugColorIndex = 0;
+      lastColorChangeTime = millis();
+      Serial.println("*** DEBUG MODE ***");
+      Serial.println("Testing NeoPixel and button. NeoPixel will cycle through colors.");
+      Serial.println("Press the button to test it. Send 'start' to exit debug mode.");
+      // Show first color
+      pixels.setPixelColor(0, colors[debugColorIndex]);
+      pixels.show();
     }
   }
 }
@@ -247,30 +299,54 @@ void startNextTrial()
   }
 }
 
-void handleButtonPress()
+void evaluateButtonState()
 {
+
   // Read button state
   int reading = digitalRead(BUTTON_PIN);
 
-  // Debounce
+  // If sufficient time has passed since the last bounce
+  if ((millis() - lastDebounceTime) > debounceDelay)
+  {
+    // Button press detected (LOW due to pull-up resistor)
+    if (reading == LOW && lastButtonState == HIGH)
+    {
+      Serial.println("entered button press");
+
+      // Different behavior based on current mode
+      if (debugMode)
+      {
+        // Button pressed in debug mode
+        Serial.println("Debug: BUTTON PRESSED!");
+
+        // Visual feedback - briefly flash white
+        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        pixels.show();
+        delay(200);
+        // Return to current color
+        pixels.setPixelColor(0, colors[debugColorIndex]);
+        pixels.show();
+      }
+      else if (taskRunning)
+      {
+        Serial.println("entered condition 1");
+        // Task is running and we're in the response window
+        handleTaskButtonPress();
+      }
+    }
+  }
+
+  // Debounce logic
   if (reading != lastButtonState)
   {
     lastDebounceTime = millis();
   }
 
-  if ((millis() - lastDebounceTime) > debounceDelay)
-  {
-    // If button is pressed (LOW due to pull-up) and task is running
-    if (reading == LOW && lastButtonState == HIGH && taskRunning && awaitingResponse)
-    {
-      buttonPressed();
-    }
-  }
-
+  // Update button state
   lastButtonState = reading;
 }
 
-void buttonPressed()
+void handleTaskButtonPress()
 {
   // Calculate reaction time
   reactionTime = millis() - trialStartTime;
@@ -314,6 +390,44 @@ void buttonPressed()
   }
 }
 
+void runDebugMode()
+{
+  unsigned long currentTime = millis();
+
+  // Cycle through colors automatically
+  if (currentTime - lastColorChangeTime > debugColorDuration)
+  {
+    debugColorIndex = (debugColorIndex + 1) % numColors;
+    pixels.setPixelColor(0, colors[debugColorIndex]);
+    pixels.show();
+
+    Serial.print("Debug: Showing color ");
+    Serial.print(debugColorIndex);
+    switch (debugColorIndex)
+    {
+    case 0:
+      Serial.println(" (RED)");
+      break;
+    case 1:
+      Serial.println(" (GREEN)");
+      break;
+    case 2:
+      Serial.println(" (BLUE)");
+      break;
+    case 3:
+      Serial.println(" (YELLOW)");
+      break;
+    default:
+      Serial.println();
+      break;
+    }
+
+    lastColorChangeTime = currentTime;
+  }
+
+  // Button press detection is now centralized in handleButtonPress()
+}
+
 void endTask()
 {
   taskRunning = false;
@@ -346,5 +460,5 @@ void endTask()
   Serial.print(averageRT);
   Serial.println(" ms");
   Serial.println("======================");
-  Serial.println("Send 'start' to begin a new session");
+  Serial.println("Send 'start' to begin a new session or 'debug' to test hardware");
 }

@@ -4,8 +4,8 @@ This document describes how to interface with the Arduino N-Back Task program vi
 
 ## Connection Setup
 
-- **Baud Rate**: 9600
-- **Line Ending**: Newline (`\n`)
+-   **Baud Rate**: 9600
+-   **Line Ending**: Newline (`\n`)
 
 ## Command Reference
 
@@ -19,19 +19,21 @@ config <stimDuration>,<interStimulusInterval>,<nBackLevel>,<trialsNumber>,<study
 
 Sets up the task with the specified parameters:
 
-- **stimDuration**: Duration in milliseconds that each stimulus is shown (e.g., 1500)
-- **interStimulusInterval**: Time in milliseconds between stimuli (e.g., 1000)
-- **nBackLevel**: The N value for the N-Back task (1 = 1-back, 2 = 2-back, etc.)
-- **trialsNumber**: Number of trials per session (maximum 50)
-- **studyId**: Identifier for the study (alphanumeric, max 9 chars)
-- **sessionNumber**: Session number (integer)
+-   **stimDuration**: Duration in milliseconds that each stimulus is shown (e.g., 1500)
+-   **interStimulusInterval**: Time in milliseconds between stimuli (e.g., 1000)
+-   **nBackLevel**: The N value for the N-Back task (1 = 1-back, 2 = 2-back, etc.)
+-   **trialsNumber**: Number of trials per session (maximum 50)
+-   **studyId**: Identifier for the study (alphanumeric, max 9 chars)
+-   **sessionNumber**: Session number (integer)
 
 Example:
+
 ```
 config 1500,1000,2,30,STUDY01,1
 ```
 
 Response:
+
 ```
 Configuration updated:
 Stimulus Duration: 1500ms
@@ -52,6 +54,7 @@ start
 Starts the task with the current configuration. The Arduino will display stimuli and collect user responses.
 
 Response:
+
 ```
 Task started
 N-back level: 2
@@ -69,11 +72,13 @@ pause
 Toggles between pausing and resuming the current task.
 
 Response when pausing:
+
 ```
 Task paused
 ```
 
 Response when resuming:
+
 ```
 Task resumed
 ```
@@ -87,12 +92,51 @@ debug
 Enters hardware test mode, cycling through colors and detecting button presses.
 
 Response:
+
 ```
 *** DEBUG MODE ***
 Testing NeoPixel and button. NeoPixel will cycle through colors.
-Press the button to test it. Send 'start' to exit debug mode.
+Press the button to test it.
+Send 'exit-debug' to return to IDLE state or 'start' to begin task.
 Debug: Showing color 0 (RED)
 ...
+```
+
+### 5. Exit Debug Mode
+
+```
+exit-debug
+```
+
+Exits debug mode and returns to the IDLE state without starting a task.
+
+Response:
+
+```
+Exiting debug mode
+Ready for commands
+```
+
+### 6. Cancel Current Task
+
+```
+exit
+```
+
+Cancels the current task (if running or paused) and discards any collected data.
+
+Response when canceling a running task:
+
+```
+Task cancelled. All data discarded.
+Ready for commands
+```
+
+Response when discarding ready data:
+
+```
+Data discarded.
+Ready for commands
 ```
 
 ### 5. Retrieve Data
@@ -104,6 +148,7 @@ get_data
 Retrieves collected data after a task is completed.
 
 Response:
+
 ```
 Sending data for X recorded trials...
 Opening Data Socket
@@ -165,13 +210,13 @@ A typical session follows this sequence:
 
 ## Error Handling
 
-- If configuration fails, you'll receive: `Failed to apply configuration - invalid parameters`
-- If requesting data before task is complete: `No data available. Run task first.`
-- If configuration format is incorrect: `Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number`
+-   If configuration fails, you'll receive: `Failed to apply configuration - invalid parameters`
+-   If requesting data before task is complete: `No data available. Run task first.`
+-   If configuration format is incorrect: `Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number`
 
 ## Implementation Notes
 
-- Timestamps are relative to session start (not absolute time)
-- All times are formatted as HH:MM:SS:mmm (hours:minutes:seconds:milliseconds)
-- Reaction times are reported in raw milliseconds for easier analysis
-- The maximum number of trials is limited to 50 due to memory constraints
+-   Timestamps are relative to session start (not absolute time)
+-   All times are formatted as HH:MM:SS:mmm (hours:minutes:seconds:milliseconds)
+-   Reaction times are reported in raw milliseconds for easier analysis
+-   The maximum number of trials is limited to 50 due to memory constraints

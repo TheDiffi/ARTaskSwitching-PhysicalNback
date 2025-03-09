@@ -85,10 +85,13 @@ void NBackTask::setup()
     Serial.println(F("N-Back Task"));
     Serial.println(F("Commands:"));
     Serial.println(F("- 'debug' to enter debug mode and test hardware"));
+    Serial.println(F("- 'exit-debug' to exit debug mode"));
     Serial.println(F("- 'start' to begin task"));
     Serial.println(F("- 'pause' to pause/resume task"));
+    Serial.println(F("- 'exit' to cancel the current task and discard data"));
     Serial.println(F("- 'get_data' to retrieve collected data"));
     Serial.println(F("- 'config stimDur,interStimInt,nBackLvl,trials,studyId,sessionNum' to configure all parameters"));
+    Serial.println(F("Ready for commands"));
 
     // Allocate memory for color sequence
     colorSequence = new int[maxTrials];
@@ -172,6 +175,31 @@ void NBackTask::processSerialCommands()
         else if (command == "debug")
         {
             enterDebugMode();
+        }
+        else if (command == "exit-debug")
+        {
+            // Exit debug mode and return to IDLE state
+            if (state == STATE_DEBUG)
+            {
+                Serial.println(F("Exiting debug mode"));
+                pixels.clear();
+                pixels.show();
+                state = STATE_IDLE;
+                Serial.println(F("Ready for commands"));
+            }
+        }
+        else if (command == "exit")
+        {
+            // Cancel the current study and discard collected data
+            if (state == STATE_RUNNING || state == STATE_PAUSED)
+            {
+                state = STATE_IDLE;
+                pixels.clear();
+                pixels.show();
+                dataCollector.reset(); // Discard collected data
+                Serial.println(F("Task cancelled. All data discarded."));
+                Serial.println(F("Ready for commands"));
+            }
         }
         else if (command == "get_data")
         {

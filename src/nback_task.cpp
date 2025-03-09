@@ -91,7 +91,7 @@ void NBackTask::setup()
     Serial.println(F("- 'exit' to cancel the current task and discard data"));
     Serial.println(F("- 'get_data' to retrieve collected data"));
     Serial.println(F("- 'config stimDur,interStimInt,nBackLvl,trials,studyId,sessionNum' to configure all parameters"));
-    Serial.println(F("Ready for commands"));
+    Serial.println(F("ready"));
 
     // Allocate memory for color sequence
     colorSequence = new int[maxTrials];
@@ -102,7 +102,7 @@ void NBackTask::setup()
 
 void NBackTask::loop()
 {
-    // Process any incoming serial commands
+    // Process any serial commands
     processSerialCommands();
 
     // Handle tasks based on current state
@@ -158,7 +158,7 @@ void NBackTask::processSerialCommands()
             // Exit debug mode if active
             if (state == STATE_DEBUG)
             {
-                Serial.println(F("Exiting debug mode"));
+                Serial.println(F("exiting debug mode"));
                 pixels.clear();
                 pixels.show();
             }
@@ -181,11 +181,11 @@ void NBackTask::processSerialCommands()
             // Exit debug mode and return to IDLE state
             if (state == STATE_DEBUG)
             {
-                Serial.println(F("Exiting debug mode"));
+                Serial.println(F("exiting debug mode"));
                 pixels.clear();
                 pixels.show();
                 state = STATE_IDLE;
-                Serial.println(F("Ready for commands"));
+                Serial.println(F("ready"));
             }
         }
         else if (command == "exit")
@@ -197,8 +197,15 @@ void NBackTask::processSerialCommands()
                 pixels.clear();
                 pixels.show();
                 dataCollector.reset(); // Discard collected data
-                Serial.println(F("Task cancelled. All data discarded."));
-                Serial.println(F("Ready for commands"));
+                Serial.println(F("exiting"));
+                Serial.println(F("ready"));
+            }
+            else if (state == STATE_DATA_READY)
+            {
+                state = STATE_IDLE;
+                dataCollector.reset(); // Discard collected data
+                Serial.println(F("exiting"));
+                Serial.println(F("ready"));
             }
         }
         else if (command == "get_data")
@@ -280,17 +287,15 @@ void NBackTask::processConfigCommand(const String &command)
 
 void NBackTask::sendData()
 {
-    // Report how many trials we're sending
     Serial.print(F("Sending data for "));
     Serial.print(dataCollector.getTrialCount());
     Serial.println(F(" recorded trials..."));
 
-    // Transmit data over serial
     dataCollector.sendDataOverSerial();
 
     // Return to idle state
     state = STATE_IDLE;
-    Serial.println(F("Data sent. Ready for new session."));
+    Serial.println(F("data-completed"));
 }
 
 //==============================================================================
@@ -380,16 +385,16 @@ void NBackTask::pauseTask(bool pause)
 
 void NBackTask::enterDebugMode()
 {
-    // Set debug mode state
+    // Enter debug mode
     state = STATE_DEBUG;
     debugColorIndex = 0;
     lastColorChangeTime = millis();
     flags.feedbackActive = false;
 
-    // Print debug mode instructions
     Serial.println(F("*** DEBUG MODE ***"));
     Serial.println(F("Testing NeoPixel and button. NeoPixel will cycle through colors."));
-    Serial.println(F("Press the button to test it. Send 'start' to exit debug mode."));
+    Serial.println(F("Press the button to test it."));
+    Serial.println(F("Send 'exit-debug' to return to IDLE state or 'start' to begin task."));
 
     // Show first color
     setNeoPixelColor(debugColorIndex);
@@ -397,20 +402,13 @@ void NBackTask::enterDebugMode()
 
 void NBackTask::endTask()
 {
-    // Set state to indicate data is ready
     state = STATE_DATA_READY;
-
-    // Turn off the NeoPixel
     pixels.clear();
     pixels.show();
 
-    // Display task results
     reportResults();
 
-    // Provide instructions for data retrieval
-    Serial.println(F("Task complete. Data ready to send."));
-    Serial.println(F("Send 'get_data' to retrieve collected data"));
-    Serial.println(F("Send 'start' to begin a new session"));
+    Serial.println(F("task-completed"));
 }
 
 bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
@@ -819,7 +817,6 @@ void NBackTask::runDebugMode()
 
 void NBackTask::resetMetrics()
 {
-    // Reset all performance metrics to zero
     metrics.correctResponses = 0;  // Hits
     metrics.falseAlarms = 0;       // False positives
     metrics.missedTargets = 0;     // False negatives

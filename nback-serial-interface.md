@@ -53,7 +53,7 @@ start
 
 Starts the task with the current configuration. The Arduino will display stimuli and collect user responses.
 
-Response:
+Initial response:
 
 ```
 Task started
@@ -62,6 +62,25 @@ Study ID: STUDY01
 Trial 1: Color 3
 ...
 ```
+
+During execution, the system will output progress information for each trial. When the task is complete:
+
+```
+=== TASK COMPLETE ===
+N-Back Level: 2
+Total Trials: 30
+Total Targets: 9
+Correct Responses: 4
+False Alarms: 3
+Missed Targets: 5
+Hit Rate: 44.44%
+Average Reaction Time (correct responses only): 1052.50 ms
+Session Duration: 00:00:34:786
+======================
+task-completed
+```
+
+The marker "task-completed" signals that the task has finished and the system is ready for the next command.
 
 ### 3. Pause/Resume Task
 
@@ -113,8 +132,8 @@ Exits debug mode and returns to the IDLE state without starting a task.
 Response:
 
 ```
-Exiting debug mode
-Ready for commands
+exiting debug mode
+ready
 ```
 
 ### 6. Cancel Current Task
@@ -125,21 +144,14 @@ exit
 
 Cancels the current task (if running or paused) and discards any collected data.
 
-Response when canceling a running task:
+Response:
 
 ```
-Task cancelled. All data discarded.
-Ready for commands
+exiting
+ready
 ```
 
-Response when discarding ready data:
-
-```
-Data discarded.
-Ready for commands
-```
-
-### 5. Retrieve Data
+### 7. Retrieve Data
 
 ```
 get_data
@@ -162,8 +174,10 @@ $$$
 STUDY01,1,3452167,00:57:32:167,01:02:15:872,00:04:43:705,30
 $$$
 Closing Data Socket
-Data sent. Ready for new session.
+data-completed
 ```
+
+The marker "data-completed" indicates the end of data transmission.
 
 ## Data Format
 
@@ -204,9 +218,10 @@ A typical session follows this sequence:
 
 1. Configure the task with the `config` command
 2. Start the task with the `start` command
-3. Wait for the task to complete
+3. Wait for the "task-completed" marker
 4. Retrieve data with the `get_data` command
-5. Process the data on the PC side
+5. Wait for the "data-completed" marker
+6. Process the data on the PC side
 
 ## Error Handling
 
@@ -220,3 +235,4 @@ A typical session follows this sequence:
 -   All times are formatted as HH:MM:SS:mmm (hours:minutes:seconds:milliseconds)
 -   Reaction times are reported in raw milliseconds for easier analysis
 -   The maximum number of trials is limited to 50 due to memory constraints
+-   Special marker words ("task-completed" and "data-completed") are used to signal completion of operations

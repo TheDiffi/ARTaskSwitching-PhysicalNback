@@ -31,12 +31,18 @@ NBackTask::NBackTask()
     flags.targetTrial = false;
     flags.feedbackActive = false;
     flags.buttonPressed = false;
+    flags.responseIsConfirm = false;
     flags.inInterStimulusInterval = false;
 
-    // Initialize button debouncing variables
-    button.lastState = HIGH;
-    button.lastDebounceTime = 0;
-    button.debounceDelay = 50;
+    // Initialize button 1 debouncing variables
+    buttonCorrect.lastState = HIGH;
+    buttonCorrect.lastDebounceTime = 0;
+    buttonCorrect.debounceDelay = 50;
+
+    // Initialize button 2 debouncing variables
+    buttonWrong.lastState = HIGH;
+    buttonWrong.lastDebounceTime = 0;
+    buttonWrong.debounceDelay = 50;
 
     // Initialize trial data recording
     trialData.reactionTime = 0;
@@ -76,7 +82,8 @@ void NBackTask::setup()
     pixels.show();
 
     // Initialize button with internal pull-up resistor
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_CORRECT_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_WRONG_PIN, INPUT_PULLUP);
 
     // Initialize serial communication
     Serial.begin(9600);
@@ -334,6 +341,7 @@ void NBackTask::startTask()
     startNextTrial();
 }
 
+// TODO: make this a fixed sequence for each task to make study results comparable
 void NBackTask::generateSequence()
 {
     // Seed the random number generator
@@ -542,54 +550,68 @@ void NBackTask::evaluateTrialOutcome()
     trialData.stimulusEndTime = millis() - dataCollector.getSessionStartTime();
 
     // Determine trial outcome:
-    // 1. Target trial + button pressed = Correct response
-    // 2. Target trial + no button press = Missed target (false negative)
-    // 3. Non-target trial + button pressed = False alarm (false positive)
-    // 4. Non-target trial + no button press = Correct rejection
+    // 0. No response = Missed target (false negative)
+    // 1. Target trial + response is confirm = Correct response
+    // 2. Target trial + response is not confirm = Missed target (false negative)
+    // 3. Non-target trial + response is confirm = False alarm (false positive)
+    // 4. Non-target trial + response is not confirm = Correct rejection
 
     bool isCorrect = false;
 
-    if (flags.targetTrial && currentTrial >= nBackLevel)
+    // Target trial
+    if (!flags.buttonPressed)
     {
-        // Target trial
-        if (flags.buttonPressed)
-        {
-            // Correct response (hit)
-            metrics.correctResponses++;
-            isCorrect = true;
-
-            // Add reaction time to totals (only for correct responses)
-            metrics.totalReactionTime += trialData.reactionTime;
-            metrics.reactionTimeCount++;
-
-            Serial.println(F("CORRECT RESPONSE!"));
-            Serial.print(F("Reaction time: "));
-            Serial.print(trialData.reactionTime);
-            Serial.println(F(" ms"));
-        }
-        else
-        {
-            // Missed target (false negative)
-            metrics.missedTargets++;
-            isCorrect = false;
-            Serial.println(F("MISSED TARGET!"));
-        }
-    }
-    else if (flags.buttonPressed)
-    {
-        // False alarm (false positive)
-        metrics.falseAlarms++;
+        // Missed target (miss = mistake)
+        metrics.missedTargets++;
         isCorrect = false;
-        Serial.println(F("FALSE ALARM!"));
-        Serial.print(F("Reaction time: "));
-        Serial.print(trialData.reactionTime);
-        Serial.println(F(" ms (not counted in average)"));
+        Serial.println(F("NO RESPONSE!"));
     }
     else
     {
-        // Correct rejection (no response to non-target)
-        isCorrect = true;
-        Serial.println(F("CORRECT REJECTION"));
+        // Add reaction time to totals (only for responses)
+        metrics.totalReactionTime += trialData.reactionTime;
+        metrics.reactionTimeCount++;
+
+        if (flags.targetTrial && currentTrial >= nBackLevel)
+        {
+            if (flags.responseIsConfirm)
+            {
+                // Correct response (hit)
+                metrics.correctResponses++;
+                isCorrect = true;
+
+                Serial.println(F("CORRECT RESPONSE!"));
+                Serial.print(F("Reaction time: "));
+                Serial.print(trialData.reactionTime);
+                Serial.println(F(" ms"));
+            }
+            else
+            {
+                // Missed target (false negative)
+                metrics.missedTargets++;
+                isCorrect = false;
+                Serial.println(F("MISSED TARGET!"));
+            }
+        }
+        else if (!flags.targetTrial)
+        {
+            if (flags.responseIsConfirm)
+            {
+                // False alarm (false positive)
+                metrics.falseAlarms++;
+                isCorrect = false;
+                Serial.println(F("FALSE ALARM!"));
+                Serial.print(F("Reaction time: "));
+                Serial.print(trialData.reactionTime);
+                Serial.println(F(" ms (not counted in average)"));
+            }
+            else
+            {
+                // Correct rejection
+                isCorrect = true;
+                Serial.println(F("CORRECT REJECTION"));
+            }
+        }
     }
 
     // Record the complete trial data in one row
@@ -600,8 +622,8 @@ void NBackTask::evaluateTrialOutcome()
         flags.buttonPressed,                              // response_made
         isCorrect,                                        // is_correct
         trialData.stimulusOnsetTime,                      // stimulus_onset_time
-        flags.buttonPressed ? trialData.responseTime : 0, // response_time (0 if no response)
-        flags.buttonPressed ? trialData.reactionTime : 0, // reaction_time (0 if no response)
+        flags.buttonPressed ? trialData.responseTime : 0, // response_time
+        flags.buttonPressed ? trialData.reactionTime : 0, // reaction_time
         trialData.stimulusEndTime                         // stimulus_end_time
     );
 }
@@ -640,47 +662,73 @@ void NBackTask::startNextTrial()
 
 void NBackTask::handleButtonPress()
 {
-    // Only process button in running state and not during feedback
-    if (state != STATE_RUNNING || flags.feedbackActive)
+    // Only process button in running state and not during feedback and if not pressed yet
+    if (state != STATE_RUNNING || flags.feedbackActive || flags.buttonPressed)
     {
         return;
     }
 
     // Read button state (LOW when pressed due to INPUT_PULLUP)
-    int reading = digitalRead(BUTTON_PIN);
+    int buttonCorrectReading = digitalRead(BUTTON_CORRECT_PIN);
+    int buttonWrongReading = digitalRead(BUTTON_WRONG_PIN);
 
-    // Handle debounced button press
-    if ((millis() - button.lastDebounceTime) > button.debounceDelay)
+    // Handle debounced button press for correct button
+    if ((millis() - buttonCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
     {
         // Button press detected (LOW due to pull-up resistor)
-        if (reading == LOW && button.lastState == HIGH && flags.awaitingResponse)
+        if (buttonCorrectReading == LOW && buttonCorrect.lastState == HIGH && flags.awaitingResponse)
         {
             // Only record reaction time for the first button press in this trial
-            if (!flags.buttonPressed)
-            {
-                // Calculate and store timing data
-                trialData.reactionTime = millis() - trialStartTime;
-                trialData.responseTime = millis() - dataCollector.getSessionStartTime();
+            // Calculate and store timing data
+            trialData.reactionTime = millis() - trialStartTime;
+            trialData.responseTime = millis() - dataCollector.getSessionStartTime();
 
-                // Mark that the button was pressed for this trial
-                flags.buttonPressed = true;
+            // Mark that the "correct" button was pressed for this trial
+            flags.buttonPressed = true;
+            flags.responseIsConfirm = true;
 
-                Serial.println(F("Button pressed"));
+            Serial.println(F("Confirm Button pressed"));
 
-                // Provide visual feedback for button press
-                handleVisualFeedback(true);
-            }
+            // Provide visual feedback for button press
+            handleVisualFeedback(true);
+        }
+    }
+
+    // Handle debounced button press for wrong button
+    if ((millis() - buttonWrong.lastDebounceTime) > buttonWrong.debounceDelay)
+    {
+        // Button press detected (LOW due to pull-up resistor)
+        if (buttonWrongReading == LOW && buttonWrong.lastState == HIGH && flags.awaitingResponse)
+        {
+            // Only record reaction time for the first button press in this trial
+            // Calculate and store timing data
+            trialData.reactionTime = millis() - trialStartTime;
+            trialData.responseTime = millis() - dataCollector.getSessionStartTime();
+
+            // Mark that the "wrong" button was pressed for this trial
+            flags.buttonPressed = true;
+            flags.responseIsConfirm = false;
+
+            Serial.println(F("Wrong button pressed"));
+
+            // Provide visual feedback for button press
+            handleVisualFeedback(true);
         }
     }
 
     // Debounce logic - track state changes
-    if (reading != button.lastState)
+    if (buttonCorrectReading != buttonCorrect.lastState)
     {
-        button.lastDebounceTime = millis();
+        buttonCorrect.lastDebounceTime = millis();
+    }
+    if (buttonWrongReading != buttonWrong.lastState)
+    {
+        buttonWrong.lastDebounceTime = millis();
     }
 
     // Update button state
-    button.lastState = reading;
+    buttonCorrect.lastState = buttonCorrectReading;
+    buttonWrong.lastState = buttonWrongReading;
 }
 
 //==============================================================================
@@ -692,7 +740,10 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
     if (startFeedback)
     {
         // Start/restart visual feedback with white flash
-        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        for (int i = 0; i < NUM_PIXELS; i++)
+        {
+            pixels.setPixelColor(i, pixels.Color(255, 255, 255));
+        }
         pixels.show();
         flags.feedbackActive = true;
         feedbackStartTime = millis();
@@ -730,13 +781,19 @@ void NBackTask::setNeoPixelColor(int colorIndex)
     // Set the NeoPixel to the specified color
     if (colorIndex >= 0 && colorIndex < COLOR_COUNT)
     {
-        pixels.setPixelColor(0, colors[colorIndex]);
+        for (int i = 0; i < NUM_PIXELS; i++)
+        {
+            pixels.setPixelColor(i, colors[colorIndex]);
+        }
         pixels.show();
     }
     else if (colorIndex == WHITE)
     {
         // Special case for white (used for feedback)
-        pixels.setPixelColor(0, pixels.Color(255, 255, 255));
+        for (int i = 0; i < NUM_PIXELS; i++)
+        {
+            pixels.setPixelColor(i, pixels.Color(255, 255, 255));
+        }
         pixels.show();
     }
 }
@@ -786,29 +843,47 @@ void NBackTask::runDebugMode()
     }
 
     // Check for button presses in debug mode
-    int reading = digitalRead(BUTTON_PIN);
+    int readingCorrect = digitalRead(BUTTON_CORRECT_PIN);
 
-    // Debounce button in debug mode
-    if ((millis() - button.lastDebounceTime) > button.debounceDelay)
+    if ((millis() - buttonCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
     {
         // Button press detected
-        if (reading == LOW && button.lastState == HIGH)
+        if (readingCorrect == LOW && buttonCorrect.lastState == HIGH)
         {
-            Serial.println(F("Debug: BUTTON PRESSED!"));
+            Serial.println(F("Debug: CONFIRM BUTTON PRESSED!"));
 
             // Provide visual feedback for button press
             handleVisualFeedback(true);
         }
     }
 
-    // Debounce logic
-    if (reading != button.lastState)
+    int readingWrong = digitalRead(BUTTON_WRONG_PIN);
+
+    if ((millis() - buttonWrong.lastDebounceTime) > buttonWrong.debounceDelay)
     {
-        button.lastDebounceTime = millis();
+        // Button press detected
+        if (readingWrong == LOW && buttonWrong.lastState == HIGH)
+        {
+            Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
+
+            // Provide visual feedback for button press
+            handleVisualFeedback(true);
+        }
+    }
+
+    // Debounce logic - track state changes
+    if (readingCorrect != buttonCorrect.lastState)
+    {
+        buttonCorrect.lastDebounceTime = millis();
+    }
+    if (readingWrong != buttonWrong.lastState)
+    {
+        buttonWrong.lastDebounceTime = millis();
     }
 
     // Update button state
-    button.lastState = reading;
+    buttonCorrect.lastState = readingCorrect;
+    buttonWrong.lastState = readingWrong;
 }
 
 //==============================================================================
@@ -852,7 +927,7 @@ void NBackTask::reportResults()
     Serial.print(F("Hit Rate: "));
     Serial.print(hitRate);
     Serial.println(F("%"));
-    Serial.print(F("Average Reaction Time (correct responses only): "));
+    Serial.print(F("Average Reaction Time (responses only): "));
     Serial.print(averageRT);
     Serial.println(F(" ms"));
     Serial.print(F("Session Duration: "));

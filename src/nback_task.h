@@ -10,9 +10,13 @@
 //==============================================================================
 
 // Pin configurations
-#define NEOPIXEL_PIN 6 // Pin connected to the NeoPixel
-#define BUTTON_PIN 2   // Pin connected to the button
-#define NUM_PIXELS 1   // Number of NeoPixels in the strip
+// #define NEOPIXEL_PIN 6 // Pin connected to the NeoPixel
+#define NEOPIXEL_PIN D2 // Pin connected to the NeoPixel
+// #define BUTTON_PIN 2   // Pin connected to the button
+#define BUTTON_CORRECT_PIN D4 // Pin connected to the button
+#define BUTTON_WRONG_PIN D3   // Pin connected to the button
+// #define NUM_PIXELS 1   // Number of NeoPixels in the strip
+#define NUM_PIXELS 8 // Number of NeoPixels in the strip
 
 //==============================================================================
 // Task Parameters
@@ -61,6 +65,7 @@ struct TrialFlags
     bool targetTrial : 1;             // Whether current trial is a target
     bool feedbackActive : 1;          // Whether visual feedback is active
     bool buttonPressed : 1;           // Whether button was pressed during this trial
+    bool responseIsConfirm : 1;       // Which response was made (confirm/incorrect)
     bool inInterStimulusInterval : 1; // Whether we're in the interval between stimuli
 };
 
@@ -131,7 +136,14 @@ private:
         int lastState;                  // Previous button state (HIGH/LOW)
         unsigned long lastDebounceTime; // Last time button state changed (ms)
         unsigned long debounceDelay;    // Debounce timeout (ms)
-    } button;
+    } buttonCorrect;
+
+    struct
+    {
+        int lastState;                  // Previous button state (HIGH/LOW)
+        unsigned long lastDebounceTime; // Last time button state changed (ms)
+        unsigned long debounceDelay;    // Debounce timeout (ms)
+    } buttonWrong;
 
     //--------------------------------------------------------------------------
     // Debug Mode Variables

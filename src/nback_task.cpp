@@ -505,22 +505,26 @@ void NBackTask::manageTrials()
 
     unsigned long currentTime = millis();
 
-    // If in response window and stimulus duration has passed
-    if (flags.awaitingResponse && currentTime - trialStartTime > timing.stimulusDuration)
+    // If in response window, check if a button was pressed or if time is up
+    if (flags.awaitingResponse)
     {
-        // Turn off the pixel
-        pixels.clear();
-        pixels.show();
-        flags.awaitingResponse = false;
+        // End the trial if a button was pressed or time is up
+        if (flags.buttonPressed /* || (currentTime - trialStartTime > timing.stimulusDuration) */)
+        {
+            // Turn off the pixel
+            pixels.clear();
+            pixels.show();
+            flags.awaitingResponse = false;
 
-        // Record when the stimulus ended
-        stimulusEndTime = currentTime;
+            // Record when the stimulus ended
+            stimulusEndTime = currentTime;
 
-        // Evaluate the trial outcome at the end
-        evaluateTrialOutcome();
+            // Evaluate the trial outcome at the end
+            evaluateTrialOutcome();
 
-        // Enter inter-stimulus interval state
-        flags.inInterStimulusInterval = true;
+            // Enter inter-stimulus interval state
+            flags.inInterStimulusInterval = true;
+        }
     }
 
     // If in inter-stimulus interval and enough time has passed

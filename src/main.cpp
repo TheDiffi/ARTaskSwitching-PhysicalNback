@@ -9,6 +9,8 @@ void setup()
 {
   // Initialize the task
   nBackTask.setup();
+  nBackTask.configure(2000, 2000, 2, 10, "TEST", 1);
+  nBackTask.startTask();
 }
 
 void loop()

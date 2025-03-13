@@ -92,6 +92,8 @@ public:
     bool configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
                    uint8_t numTrials, const char *studyId, uint16_t sessionNum);
 
+    void startTask();
+
 private:
     //--------------------------------------------------------------------------
     // Timing Parameters
@@ -170,7 +172,6 @@ private:
     //--------------------------------------------------------------------------
     // State Management Methods
     //--------------------------------------------------------------------------
-    void startTask();
     void generateSequence();
     void pauseTask(bool pause);
     void enterDebugMode();

@@ -10,13 +10,18 @@
 //==============================================================================
 
 // Pin configurations
-// #define NEOPIXEL_PIN 6 // Pin connected to the NeoPixel
-#define NEOPIXEL_PIN D2 // Pin connected to the NeoPixel
-// #define BUTTON_PIN 2   // Pin connected to the button
-#define BUTTON_CORRECT_PIN D4 // Pin connected to the button
-#define BUTTON_WRONG_PIN D3   // Pin connected to the button
+#define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel
+// #define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel
+//  #define BUTTON_PIN 2   // Pin connected to the button
+#define BUTTON_CORRECT_PIN 14 // Pin connected to the button
+#define BUTTON_WRONG_PIN 12   // Pin connected to the button
 // #define NUM_PIXELS 1   // Number of NeoPixels in the strip
 #define NUM_PIXELS 8 // Number of NeoPixels in the strip
+
+// Capacitive touch configuration
+#define TOUCH_CORRECT_PIN 14 // Pin connected to the capacitive touch sensor
+#define TOUCH_WRONG_PIN 13   // Pin connected to the capacitive touch sensor
+#define TOUCH_THRESHOLD 37   // Touch sensitivity threshold
 
 //==============================================================================
 // Task Parameters
@@ -52,6 +57,13 @@ enum TaskState
     STATE_PAUSED,    // Task is temporarily paused
     STATE_DEBUG,     // Hardware debug mode active
     STATE_DATA_READY // Task complete, data ready to send
+};
+
+// Input mode selection
+enum InputMode
+{
+    BUTTON_INPUT,    // Traditional push button input
+    CAPACITIVE_INPUT // Capacitive touch input
 };
 
 //==============================================================================
@@ -99,6 +111,9 @@ public:
 
     void startTask();
 
+    // Input mode control - can be called via command
+    void setInputMode(int mode);
+
 private:
     //--------------------------------------------------------------------------
     // Timing Parameters
@@ -129,8 +144,12 @@ private:
     TrialData trialData;             // Data for the current trial
 
     //--------------------------------------------------------------------------
-    // Button Handling
+    // Input Handling
     //--------------------------------------------------------------------------
+    // Input mode
+    InputMode inputMode;
+
+    // Button input structures
     struct
     {
         int lastState;                  // Previous button state (HIGH/LOW)
@@ -144,6 +163,23 @@ private:
         unsigned long lastDebounceTime; // Last time button state changed (ms)
         unsigned long debounceDelay;    // Debounce timeout (ms)
     } buttonWrong;
+
+    // Capacitive touch input
+    struct
+    {
+        int value;                      // Current touch sensor value
+        int threshold;                  // Touch detection threshold
+        bool lastState;                 // Previous touch state
+        unsigned long lastDebounceTime; // Last time touch state changed (ms)
+    } touchCorrect, touchWrong;
+
+    // Input abstraction methods
+    void initializeInput();
+    bool readCorrectInput();
+    bool readWrongInput();
+    void checkInputs();
+    bool isCorrectPressed();
+    bool isWrongPressed();
 
     //--------------------------------------------------------------------------
     // Debug Mode Variables

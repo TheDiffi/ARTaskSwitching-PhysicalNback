@@ -15,6 +15,7 @@ NBackTask::NBackTask()
       feedbackStartTime(0),
       debugColorIndex(0),
       lastColorChangeTime(0),
+      inputMode(BUTTON_INPUT),
       colorSequence(nullptr)
 {
     // Set default study ID
@@ -37,12 +38,23 @@ NBackTask::NBackTask()
     // Initialize button 1 debouncing variables
     buttonCorrect.lastState = HIGH;
     buttonCorrect.lastDebounceTime = 0;
-    buttonCorrect.debounceDelay = 50;
+    buttonCorrect.debounceDelay = 20;
 
     // Initialize button 2 debouncing variables
     buttonWrong.lastState = HIGH;
     buttonWrong.lastDebounceTime = 0;
-    buttonWrong.debounceDelay = 50;
+    buttonWrong.debounceDelay = 20;
+
+    // Initialize capacitive touch variables
+    touchCorrect.value = 0;
+    touchCorrect.threshold = TOUCH_THRESHOLD;
+    touchCorrect.lastState = false;
+    touchCorrect.lastDebounceTime = 0;
+
+    touchWrong.value = 0;
+    touchWrong.threshold = TOUCH_THRESHOLD;
+    touchWrong.lastState = false;
+    touchWrong.lastDebounceTime = 0;
 
     // Initialize trial data recording
     trialData.reactionTime = 0;
@@ -81,9 +93,8 @@ void NBackTask::setup()
     pixels.clear();
     pixels.show();
 
-    // Initialize button with internal pull-up resistor
-    pinMode(BUTTON_CORRECT_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_WRONG_PIN, INPUT_PULLUP);
+    // Initialize input system based on current mode
+    initializeInput();
 
     // Initialize serial communication
     Serial.begin(9600);
@@ -98,6 +109,7 @@ void NBackTask::setup()
     Serial.println(F("- 'exit' to cancel the current task and discard data"));
     Serial.println(F("- 'get_data' to retrieve collected data"));
     Serial.println(F("- 'config stimDur,interStimInt,nBackLvl,trials,studyId,sessionNum' to configure all parameters"));
+    Serial.println(F("- 'input_mode 0|1' to set input mode (0=button, 1=touch)"));
     Serial.println(F("ready"));
 
     // Allocate memory for color sequence
@@ -230,6 +242,12 @@ void NBackTask::processSerialCommands()
         else if (command.startsWith("config "))
         {
             processConfigCommand(command);
+        }
+        else if (command.startsWith("input_mode "))
+        {
+            // Process input mode change command
+            int mode = command.substring(11).toInt();
+            setInputMode(mode);
         }
     }
 }
@@ -666,73 +684,45 @@ void NBackTask::startNextTrial()
 
 void NBackTask::handleButtonPress()
 {
-    // Only process button in running state and not during feedback and if not pressed yet
+    // Only process input in running state and not during feedback and if not pressed yet
     if (state != STATE_RUNNING || flags.feedbackActive || flags.buttonPressed)
     {
         return;
     }
 
-    // Read button state (LOW when pressed due to INPUT_PULLUP)
-    int buttonCorrectReading = digitalRead(BUTTON_CORRECT_PIN);
-    int buttonWrongReading = digitalRead(BUTTON_WRONG_PIN);
-
-    // Handle debounced button press for correct button
-    if ((millis() - buttonCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
+    // Check for correct button press using abstraction
+    if (isCorrectPressed() && flags.awaitingResponse)
     {
-        // Button press detected (LOW due to pull-up resistor)
-        if (buttonCorrectReading == LOW && buttonCorrect.lastState == HIGH && flags.awaitingResponse)
-        {
-            // Only record reaction time for the first button press in this trial
-            // Calculate and store timing data
-            trialData.reactionTime = millis() - trialStartTime;
-            trialData.responseTime = millis() - dataCollector.getSessionStartTime();
+        // Calculate and store timing data
+        trialData.reactionTime = millis() - trialStartTime;
+        trialData.responseTime = millis() - dataCollector.getSessionStartTime();
 
-            // Mark that the "correct" button was pressed for this trial
-            flags.buttonPressed = true;
-            flags.responseIsConfirm = true;
+        // Mark that the "correct" button was pressed for this trial
+        flags.buttonPressed = true;
+        flags.responseIsConfirm = true;
 
-            Serial.println(F("Confirm Button pressed"));
+        Serial.println(F("Confirm Button pressed"));
 
-            // Provide visual feedback for button press
-            handleVisualFeedback(true);
-        }
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
     }
 
-    // Handle debounced button press for wrong button
-    if ((millis() - buttonWrong.lastDebounceTime) > buttonWrong.debounceDelay)
+    // Check for wrong button press using abstraction
+    if (isWrongPressed() && flags.awaitingResponse)
     {
-        // Button press detected (LOW due to pull-up resistor)
-        if (buttonWrongReading == LOW && buttonWrong.lastState == HIGH && flags.awaitingResponse)
-        {
-            // Only record reaction time for the first button press in this trial
-            // Calculate and store timing data
-            trialData.reactionTime = millis() - trialStartTime;
-            trialData.responseTime = millis() - dataCollector.getSessionStartTime();
+        // Calculate and store timing data
+        trialData.reactionTime = millis() - trialStartTime;
+        trialData.responseTime = millis() - dataCollector.getSessionStartTime();
 
-            // Mark that the "wrong" button was pressed for this trial
-            flags.buttonPressed = true;
-            flags.responseIsConfirm = false;
+        // Mark that the "wrong" button was pressed for this trial
+        flags.buttonPressed = true;
+        flags.responseIsConfirm = false;
 
-            Serial.println(F("Wrong button pressed"));
+        Serial.println(F("Wrong button pressed"));
 
-            // Provide visual feedback for button press
-            handleVisualFeedback(true);
-        }
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
     }
-
-    // Debounce logic - track state changes
-    if (buttonCorrectReading != buttonCorrect.lastState)
-    {
-        buttonCorrect.lastDebounceTime = millis();
-    }
-    if (buttonWrongReading != buttonWrong.lastState)
-    {
-        buttonWrong.lastDebounceTime = millis();
-    }
-
-    // Update button state
-    buttonCorrect.lastState = buttonCorrectReading;
-    buttonWrong.lastState = buttonWrongReading;
 }
 
 //==============================================================================
@@ -846,48 +836,194 @@ void NBackTask::runDebugMode()
         lastColorChangeTime = currentTime;
     }
 
-    // Check for button presses in debug mode
-    int readingCorrect = digitalRead(BUTTON_CORRECT_PIN);
-
-    if ((millis() - buttonCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
+    // Check correct button/touch input
+    if (isCorrectPressed())
     {
-        // Button press detected
-        if (readingCorrect == LOW && buttonCorrect.lastState == HIGH)
-        {
-            Serial.println(F("Debug: CONFIRM BUTTON PRESSED!"));
+        Serial.println(F("Debug: CONFIRM BUTTON PRESSED!"));
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
+    }
 
-            // Provide visual feedback for button press
-            handleVisualFeedback(true);
+    // Check wrong button/touch input
+    if (isWrongPressed())
+    {
+        Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
+    }
+}
+
+//==============================================================================
+// Input Handling System
+//==============================================================================
+
+void NBackTask::setInputMode(int mode)
+{
+    if (mode == 0)
+    {
+        inputMode = BUTTON_INPUT;
+        Serial.println(F("Input mode set to BUTTON"));
+    }
+    else if (mode == 1)
+    {
+        inputMode = CAPACITIVE_INPUT;
+        Serial.println(F("Input mode set to CAPACITIVE TOUCH"));
+    }
+    else
+    {
+        Serial.println(F("Invalid input mode. Use 0 for button or 1 for capacitive touch."));
+        return;
+    }
+
+    // Re-initialize the input system with the new mode
+    initializeInput();
+}
+
+void NBackTask::initializeInput()
+{
+    if (inputMode == BUTTON_INPUT)
+    {
+        // Initialize buttons with internal pull-up resistor
+        pinMode(BUTTON_CORRECT_PIN, INPUT_PULLUP);
+        pinMode(BUTTON_WRONG_PIN, INPUT_PULLUP);
+    }
+    else
+    {
+        // For capacitive touch, no pin mode is needed as touchRead() handles it
+        // Reset touch states
+        touchCorrect.lastState = false;
+        touchWrong.lastState = false;
+    }
+}
+
+bool NBackTask::readCorrectInput()
+{
+    if (inputMode == BUTTON_INPUT)
+    {
+        // For physical button, LOW means pressed (due to INPUT_PULLUP)
+        return digitalRead(BUTTON_CORRECT_PIN) == LOW;
+    }
+    else
+    {
+        // For capacitive touch, check against threshold
+        touchCorrect.value = touchRead(TOUCH_CORRECT_PIN);
+        return touchCorrect.value < touchCorrect.threshold;
+    }
+}
+
+bool NBackTask::readWrongInput()
+{
+    if (inputMode == BUTTON_INPUT)
+    {
+        // For physical button, LOW means pressed (due to INPUT_PULLUP)
+        return digitalRead(BUTTON_WRONG_PIN) == LOW;
+    }
+    else
+    {
+        // For capacitive touch, check against threshold
+        touchWrong.value = touchRead(TOUCH_WRONG_PIN);
+        return touchWrong.value < touchWrong.threshold;
+    }
+}
+
+bool NBackTask::isCorrectPressed()
+{
+    // Get the current input state with debouncing
+    unsigned long currentTime = millis();
+    bool currentState = readCorrectInput();
+
+    // If input mode is traditional button
+    if (inputMode == BUTTON_INPUT)
+    {
+        // Only consider a button press if enough time has passed since the last state change
+        if ((currentTime - buttonCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
+        {
+            // Check if state changed from not pressed to pressed
+            if (currentState == true && buttonCorrect.lastState == false)
+            {
+                buttonCorrect.lastDebounceTime = currentTime;
+                buttonCorrect.lastState = currentState;
+                return true;
+            }
+        }
+        if (currentState != buttonCorrect.lastState)
+        {
+            buttonCorrect.lastDebounceTime = currentTime;
+            buttonCorrect.lastState = currentState;
+        }
+    }
+    // If input mode is capacitive touch
+    else
+    {
+        // Only consider a touch if enough time has passed since the last state change
+        if ((currentTime - touchCorrect.lastDebounceTime) > buttonCorrect.debounceDelay)
+        {
+            // Check if state changed from not touched to touched
+            if (currentState == true && touchCorrect.lastState == false)
+            {
+                touchCorrect.lastDebounceTime = currentTime;
+                touchCorrect.lastState = currentState;
+                return true;
+            }
+        }
+        if (currentState != touchCorrect.lastState)
+        {
+            touchCorrect.lastDebounceTime = currentTime;
+            touchCorrect.lastState = currentState;
         }
     }
 
-    int readingWrong = digitalRead(BUTTON_WRONG_PIN);
+    return false;
+}
 
-    if ((millis() - buttonWrong.lastDebounceTime) > buttonWrong.debounceDelay)
+bool NBackTask::isWrongPressed()
+{
+    // Get the current input state with debouncing
+    unsigned long currentTime = millis();
+    bool currentState = readWrongInput();
+
+    // If input mode is traditional button
+    if (inputMode == BUTTON_INPUT)
     {
-        // Button press detected
-        if (readingWrong == LOW && buttonWrong.lastState == HIGH)
+        // Only consider a button press if enough time has passed since the last state change
+        if ((currentTime - buttonWrong.lastDebounceTime) > buttonWrong.debounceDelay)
         {
-            Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
-
-            // Provide visual feedback for button press
-            handleVisualFeedback(true);
+            // Check if state changed from not pressed to pressed
+            if (currentState == true && buttonWrong.lastState == false)
+            {
+                buttonWrong.lastDebounceTime = currentTime;
+                buttonWrong.lastState = currentState;
+                return true;
+            }
+        }
+        if (currentState != buttonWrong.lastState)
+        {
+            buttonWrong.lastDebounceTime = currentTime;
+            buttonWrong.lastState = currentState;
+        }
+    }
+    // If input mode is capacitive touch
+    else
+    {
+        // Only consider a touch if enough time has passed since the last state change
+        if ((currentTime - touchWrong.lastDebounceTime) > buttonWrong.debounceDelay)
+        {
+            // Check if state changed from not touched to touched
+            if (currentState == true && touchWrong.lastState == false)
+            {
+                touchWrong.lastDebounceTime = currentTime;
+                touchWrong.lastState = currentState;
+                return true;
+            }
+        }
+        if (currentState != touchWrong.lastState)
+        {
+            touchWrong.lastDebounceTime = currentTime;
+            touchWrong.lastState = currentState;
         }
     }
 
-    // Debounce logic - track state changes
-    if (readingCorrect != buttonCorrect.lastState)
-    {
-        buttonCorrect.lastDebounceTime = millis();
-    }
-    if (readingWrong != buttonWrong.lastState)
-    {
-        buttonWrong.lastDebounceTime = millis();
-    }
-
-    // Update button state
-    buttonCorrect.lastState = readingCorrect;
-    buttonWrong.lastState = readingWrong;
+    return false;
 }
 
 //==============================================================================

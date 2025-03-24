@@ -18,7 +18,7 @@
 #define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel
 // #define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel
 
-#define BUTTON_CORRECT_PIN 14 // Pin connected to the button
+#define BUTTON_CORRECT_PIN 16 // Pin connected to the button
 #define BUTTON_WRONG_PIN 12   // Pin connected to the button
 
 // #define NUM_PIXELS 1   // Number of NeoPixels in the strip

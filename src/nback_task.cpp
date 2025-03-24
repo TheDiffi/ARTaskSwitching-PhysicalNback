@@ -70,6 +70,7 @@ NBackTask::NBackTask()
     colors[GREEN] = pixels.Color(0, 255, 0);    // Green
     colors[BLUE] = pixels.Color(0, 0, 255);     // Blue
     colors[YELLOW] = pixels.Color(255, 255, 0); // Yellow
+    colors[PURPLE] = pixels.Color(255, 0, 255); // Purple
 }
 
 NBackTask::~NBackTask()
@@ -93,7 +94,7 @@ void NBackTask::setup()
     pixels.setBrightness(255);
 
     // Initial power-on test
-    setNeoPixelColor(GREEN);
+    setNeoPixelColor(PURPLE);
     delay(1000);
     pixels.clear();
     pixels.show();
@@ -787,7 +788,7 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
 void NBackTask::setNeoPixelColor(int colorIndex)
 {
     // Set the NeoPixel to the specified color
-    if (colorIndex >= 0 && colorIndex < COLOR_COUNT)
+    if (colorIndex >= 0)
     {
         for (int i = 0; i < NUM_PIXELS; i++)
         {
@@ -838,7 +839,7 @@ void NBackTask::runDebugMode()
         Serial.print(debugColorIndex);
 
         // Show color name for readability
-        const char *colorNames[] = {"RED", "GREEN", "BLUE", "YELLOW"};
+        const char *colorNames[] = {"RED", "GREEN", "BLUE"};
         if (debugColorIndex < COLOR_COUNT)
         {
             Serial.print(F(" ("));

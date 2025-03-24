@@ -41,7 +41,8 @@ enum ColorIndex
     GREEN = 1,
     BLUE = 2,
     YELLOW = 3,
-    COLOR_COUNT = 4, // Total number of colors used
+    PURPLE = 4,
+    COLOR_COUNT = 3, // Total number of colors used
     WHITE = 99       // Special case for visual feedback
 };
 

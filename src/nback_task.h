@@ -56,8 +56,9 @@ enum ColorIndex
     BLUE = 2,
     YELLOW = 3,
     PURPLE = 4,
-    COLOR_COUNT = 3, // Total number of colors used
-    WHITE = 99       // Special case for visual feedback
+    WHITE = 5,       // Special case for visual feedback
+    COLOR_COUNT = 6, // Total number of colors used
+    COLORS_USED = 3  // Number of colors used in the task
 };
 
 //==============================================================================

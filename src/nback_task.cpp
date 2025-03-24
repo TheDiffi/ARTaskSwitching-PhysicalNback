@@ -66,11 +66,12 @@ NBackTask::NBackTask()
     resetMetrics();
 
     // Initialize the NeoPixel colors array
-    colors[RED] = pixels.Color(255, 0, 0);      // Red
-    colors[GREEN] = pixels.Color(0, 255, 0);    // Green
-    colors[BLUE] = pixels.Color(0, 0, 255);     // Blue
-    colors[YELLOW] = pixels.Color(255, 255, 0); // Yellow
-    colors[PURPLE] = pixels.Color(255, 0, 255); // Purple
+    colors[RED] = pixels.Color(255, 0, 0);       // Red
+    colors[GREEN] = pixels.Color(0, 255, 0);     // Green
+    colors[BLUE] = pixels.Color(0, 0, 255);      // Blue
+    colors[YELLOW] = pixels.Color(255, 255, 0);  // Yellow
+    colors[PURPLE] = pixels.Color(255, 0, 255);  // Purple
+    colors[WHITE] = pixels.Color(255, 255, 255); // White
 }
 
 NBackTask::~NBackTask()
@@ -379,7 +380,7 @@ void NBackTask::generateSequence()
     // First, fill with random colors
     for (int i = 0; i < maxTrials; i++)
     {
-        colorSequence[i] = random(COLOR_COUNT);
+        colorSequence[i] = random(COLORS_USED);
     }
 
     // Then ensure we have target trials (n-back matches) after position n
@@ -577,6 +578,12 @@ void NBackTask::renderPixels()
     if (flags.feedbackActive)
     {
         setNeoPixelColor(WHITE);
+        return;
+    }
+
+    if (state == STATE_DEBUG)
+    {
+        setNeoPixelColor(debugColorIndex);
         return;
     }
 
@@ -788,20 +795,11 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
 void NBackTask::setNeoPixelColor(int colorIndex)
 {
     // Set the NeoPixel to the specified color
-    if (colorIndex >= 0)
+    if (colorIndex >= 0 && colorIndex < COLOR_COUNT)
     {
         for (int i = 0; i < NUM_PIXELS; i++)
         {
             pixels.setPixelColor(i, colors[colorIndex]);
-        }
-        pixels.show();
-    }
-    else if (colorIndex == WHITE)
-    {
-        // Special case for white (used for feedback)
-        for (int i = 0; i < NUM_PIXELS; i++)
-        {
-            pixels.setPixelColor(i, pixels.Color(255, 255, 255));
         }
         pixels.show();
     }
@@ -814,6 +812,7 @@ void NBackTask::setNeoPixelColor(int colorIndex)
 void NBackTask::runDebugMode()
 {
     handleVisualFeedback(false);
+    renderPixels();
 
     unsigned long currentTime = millis();
 
@@ -832,14 +831,13 @@ void NBackTask::runDebugMode()
     {
         // Move to next color in cycle
         debugColorIndex = (debugColorIndex + 1) % COLOR_COUNT;
-        setNeoPixelColor(debugColorIndex);
 
         // Report current color
         Serial.print(F("Debug: Showing color "));
         Serial.print(debugColorIndex);
 
         // Show color name for readability
-        const char *colorNames[] = {"RED", "GREEN", "BLUE"};
+        const char *colorNames[] = {"RED", "GREEN", "BLUE, YELLOW, PURPLE"};
         if (debugColorIndex < COLOR_COUNT)
         {
             Serial.print(F(" ("));
@@ -869,8 +867,6 @@ void NBackTask::runDebugMode()
         // Provide visual feedback for button press
         handleVisualFeedback(true);
     }
-
-    renderPixels();
 }
 
 //==============================================================================

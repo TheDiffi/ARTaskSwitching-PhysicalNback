@@ -15,7 +15,7 @@ NBackTask::NBackTask()
       feedbackStartTime(0),
       debugColorIndex(0),
       lastColorChangeTime(0),
-      inputMode(CAPACITIVE_INPUT),
+      inputMode(INPUT_MODE),
       colorSequence(nullptr)
 {
     // Set default study ID

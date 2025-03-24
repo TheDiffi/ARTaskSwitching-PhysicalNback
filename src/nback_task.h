@@ -15,8 +15,16 @@
 //==============================================================================
 
 // Pin configurations
-#define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel
-// #define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel
+#if defined(ESP32)
+#define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel for ESP32
+#define INPUT_MODE CAPACITIVE_INPUT
+#elif defined(ESP8266)
+#define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel for ESP8266 (D1 Mini)
+#define INPUT_MODE BUTTON_INPUT
+#else
+#define NEOPIXEL_PIN 4 // Default pin if board cannot be determined
+#define INPUT_MODE BUTTON_INPUT
+#endif
 
 #define BUTTON_CORRECT_PIN 16 // Pin connected to the button
 #define BUTTON_WRONG_PIN 12   // Pin connected to the button

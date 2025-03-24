@@ -818,8 +818,6 @@ void NBackTask::runDebugMode()
         Serial.println(touchValue2);
     }
 
-    unsigned long currentTime = millis();
-
     // Cycle through colors automatically at set intervals
     if (currentTime - lastColorChangeTime > timing.debugColorDuration)
     {

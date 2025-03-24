@@ -15,7 +15,7 @@ NBackTask::NBackTask()
       feedbackStartTime(0),
       debugColorIndex(0),
       lastColorChangeTime(0),
-      inputMode(BUTTON_INPUT),
+      inputMode(CAPACITIVE_INPUT),
       colorSequence(nullptr)
 {
     // Set default study ID
@@ -800,11 +800,22 @@ void NBackTask::runDebugMode()
 {
     // First handle any ongoing visual feedback
     handleVisualFeedback(false);
+    unsigned long currentTime = millis();
 
     // If feedback is active, don't do other debug operations
     if (flags.feedbackActive)
     {
         return;
+    }
+
+    if (inputMode == CAPACITIVE_INPUT && currentTime % 300 == 0 && false)
+    {
+        int touchValue = touchRead(TOUCH_CORRECT_PIN);
+        int touchValue2 = touchRead(TOUCH_WRONG_PIN);
+        Serial.print(F("Touch value: "));
+        Serial.print(touchValue);
+        Serial.print(F(" Touch value 2: "));
+        Serial.println(touchValue2);
     }
 
     unsigned long currentTime = millis();

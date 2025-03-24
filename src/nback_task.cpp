@@ -88,8 +88,13 @@ NBackTask::~NBackTask()
 
 void NBackTask::setup()
 {
-    // Initialize NeoPixel
+    // Initialize LED strip
     pixels.begin();
+    pixels.setBrightness(255);
+
+    // Initial power-on test
+    setNeoPixelColor(GREEN);
+    delay(1000);
     pixels.clear();
     pixels.show();
 
@@ -134,10 +139,12 @@ void NBackTask::loop()
 
     case STATE_PAUSED:
         // When paused, do nothing until resumed
+        renderPixels();
         break;
 
     case STATE_RUNNING:
         // Handle ongoing task
+        renderPixels();
 
         // Check if visual feedback needs to be ended
         handleVisualFeedback(false);
@@ -529,9 +536,7 @@ void NBackTask::manageTrials()
         // End the trial if a button was pressed or time is up
         if (flags.buttonPressed /* || (currentTime - trialStartTime > timing.stimulusDuration) */)
         {
-            // Turn off the pixel
-            pixels.clear();
-            pixels.show();
+            // End the trial
             flags.awaitingResponse = false;
 
             // Record when the stimulus ended
@@ -563,6 +568,41 @@ void NBackTask::manageTrials()
             // End of task
             endTask();
         }
+    }
+}
+
+void NBackTask::renderPixels()
+{
+    if (flags.feedbackActive)
+    {
+        setNeoPixelColor(WHITE);
+        return;
+    }
+
+    if (state == STATE_IDLE || state == STATE_PAUSED || state == STATE_DATA_READY)
+    {
+        pixels.clear();
+        pixels.show();
+        return;
+    }
+
+    if (flags.inInterStimulusInterval)
+    {
+        pixels.clear();
+        pixels.show();
+        return;
+    }
+
+    if (flags.awaitingResponse)
+    {
+        // Show the current color during response window
+        setNeoPixelColor(colorSequence[currentTrial]);
+    }
+    else
+    {
+        // Show nothing during stimulus presentation
+        pixels.clear();
+        pixels.show();
     }
 }
 
@@ -652,9 +692,6 @@ void NBackTask::evaluateTrialOutcome()
 
 void NBackTask::startNextTrial()
 {
-    // Display the current color
-    setNeoPixelColor(colorSequence[currentTrial]);
-
     // Record start time
     trialStartTime = millis();
     trialData.stimulusOnsetTime = trialStartTime - dataCollector.getSessionStartTime();
@@ -734,11 +771,6 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
     if (startFeedback)
     {
         // Start/restart visual feedback with white flash
-        for (int i = 0; i < NUM_PIXELS; i++)
-        {
-            pixels.setPixelColor(i, pixels.Color(255, 255, 255));
-        }
-        pixels.show();
         flags.feedbackActive = true;
         feedbackStartTime = millis();
         return;
@@ -749,24 +781,6 @@ void NBackTask::handleVisualFeedback(boolean startFeedback)
     {
         // End the feedback flash
         flags.feedbackActive = false;
-
-        // Restore appropriate display based on current state
-        if (state == STATE_DEBUG)
-        {
-            // In debug mode, return to the current color
-            setNeoPixelColor(debugColorIndex);
-        }
-        else if (state == STATE_RUNNING && flags.awaitingResponse)
-        {
-            // In task mode during stimulus, show the current color
-            setNeoPixelColor(colorSequence[currentTrial]);
-        }
-        else
-        {
-            // Otherwise, turn off the pixel
-            pixels.clear();
-            pixels.show();
-        }
     }
 }
 
@@ -798,15 +812,9 @@ void NBackTask::setNeoPixelColor(int colorIndex)
 
 void NBackTask::runDebugMode()
 {
-    // First handle any ongoing visual feedback
     handleVisualFeedback(false);
-    unsigned long currentTime = millis();
 
-    // If feedback is active, don't do other debug operations
-    if (flags.feedbackActive)
-    {
-        return;
-    }
+    unsigned long currentTime = millis();
 
     if (inputMode == CAPACITIVE_INPUT && currentTime % 300 == 0 && false)
     {
@@ -860,6 +868,8 @@ void NBackTask::runDebugMode()
         // Provide visual feedback for button press
         handleVisualFeedback(true);
     }
+
+    renderPixels();
 }
 
 //==============================================================================

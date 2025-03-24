@@ -229,6 +229,7 @@ private:
     // Trial Management Methods
     //--------------------------------------------------------------------------
     void manageTrials();
+    void renderPixels();
     void startNextTrial();
     void handleButtonPress();
     void evaluateTrialOutcome();

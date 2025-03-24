@@ -5,6 +5,11 @@
 #include <Adafruit_NeoPixel.h>
 #include "data_collector.h"
 
+// if touchRead is not defined, define it
+#ifndef touchRead
+#define touchRead(p) (analogRead(p))
+#endif
+
 //==============================================================================
 // Hardware Configuration
 //==============================================================================
@@ -12,9 +17,10 @@
 // Pin configurations
 #define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel
 // #define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel
-//  #define BUTTON_PIN 2   // Pin connected to the button
+
 #define BUTTON_CORRECT_PIN 14 // Pin connected to the button
 #define BUTTON_WRONG_PIN 12   // Pin connected to the button
+
 // #define NUM_PIXELS 1   // Number of NeoPixels in the strip
 #define NUM_PIXELS 8 // Number of NeoPixels in the strip
 

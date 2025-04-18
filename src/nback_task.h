@@ -6,9 +6,9 @@
 #include "data_collector.h"
 
 // if touchRead is not defined, define it
-#ifndef touchRead
-#define touchRead(p) (analogRead(p))
-#endif
+// #ifndef touchRead
+// #define touchRead(p) (analogRead(p))
+// #endif
 
 //==============================================================================
 // Hardware Configuration
@@ -33,9 +33,10 @@
 #define NUM_PIXELS 8 // Number of NeoPixels in the strip
 
 // Capacitive touch configuration
-#define TOUCH_CORRECT_PIN 14 // Pin connected to the capacitive touch sensor
-#define TOUCH_WRONG_PIN 13   // Pin connected to the capacitive touch sensor
-#define TOUCH_THRESHOLD 37   // Touch sensitivity threshold
+#define TOUCH_CORRECT_PIN 14       // Pin connected to the capacitive touch sensor
+#define TOUCH_WRONG_PIN 13         // Pin connected to the capacitive touch sensor
+#define TOUCH_THRESHOLD_CORRECT 32 // Touch sensitivity threshold
+#define TOUCH_THRESHOLD_WRONG 32   // Touch sensitivity threshold
 
 //==============================================================================
 // Task Parameters
@@ -126,9 +127,7 @@ public:
                    uint8_t numTrials, const char *studyId, uint16_t sessionNum);
 
     void startTask();
-
-    // Input mode control - can be called via command
-    void setInputMode(int mode);
+    bool processSerialCommands(const String &command);
 
 private:
     //--------------------------------------------------------------------------
@@ -229,7 +228,6 @@ private:
     //--------------------------------------------------------------------------
     // Command Processing Methods
     //--------------------------------------------------------------------------
-    void processSerialCommands();
     void processConfigCommand(const String &command);
     void sendData();
 

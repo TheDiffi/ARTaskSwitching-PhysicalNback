@@ -47,12 +47,12 @@ NBackTask::NBackTask()
 
     // Initialize capacitive touch variables
     touchCorrect.value = 0;
-    touchCorrect.threshold = TOUCH_THRESHOLD;
+    touchCorrect.threshold = TOUCH_THRESHOLD_CORRECT;
     touchCorrect.lastState = false;
     touchCorrect.lastDebounceTime = 0;
 
     touchWrong.value = 0;
-    touchWrong.threshold = TOUCH_THRESHOLD;
+    touchWrong.threshold = TOUCH_THRESHOLD_WRONG;
     touchWrong.lastState = false;
     touchWrong.lastDebounceTime = 0;
 
@@ -128,8 +128,6 @@ void NBackTask::setup()
 
 void NBackTask::loop()
 {
-    // Process any serial commands
-    processSerialCommands();
 
     // Handle tasks based on current state
     switch (state)
@@ -172,93 +170,97 @@ void NBackTask::loop()
 // Command Processing
 //==============================================================================
 
-void NBackTask::processSerialCommands()
+bool NBackTask::processSerialCommands(const String &command)
 {
-    if (Serial.available() > 0)
+    // Check for empty command
+    if (command.length() == 0)
     {
-        // Read and trim the incoming command
-        String command = Serial.readStringUntil('\n');
-        command.trim();
-
-        // Handle different commands
-        if (command == "start")
-        {
-            // Exit debug mode if active
-            if (state == STATE_DEBUG)
-            {
-                Serial.println(F("exiting debug mode"));
-                pixels.clear();
-                pixels.show();
-            }
-            startTask();
-        }
-        else if (command == "pause")
-        {
-            // Toggle pause state
-            if (state == STATE_RUNNING || state == STATE_PAUSED)
-            {
-                pauseTask(state != STATE_PAUSED);
-            }
-        }
-        else if (command == "debug")
-        {
-            enterDebugMode();
-        }
-        else if (command == "exit-debug")
-        {
-            // Exit debug mode and return to IDLE state
-            if (state == STATE_DEBUG)
-            {
-                Serial.println(F("exiting debug mode"));
-                pixels.clear();
-                pixels.show();
-                state = STATE_IDLE;
-                Serial.println(F("ready"));
-            }
-        }
-        else if (command == "exit")
-        {
-            // Cancel the current study and discard collected data
-            if (state == STATE_RUNNING || state == STATE_PAUSED)
-            {
-                state = STATE_IDLE;
-                pixels.clear();
-                pixels.show();
-                dataCollector.reset(); // Discard collected data
-                Serial.println(F("exiting"));
-                Serial.println(F("ready"));
-            }
-            else if (state == STATE_DATA_READY)
-            {
-                state = STATE_IDLE;
-                dataCollector.reset(); // Discard collected data
-                Serial.println(F("exiting"));
-                Serial.println(F("ready"));
-            }
-        }
-        else if (command == "get_data")
-        {
-            // Send collected data over serial if available
-            if (state == STATE_DATA_READY)
-            {
-                sendData();
-            }
-            else
-            {
-                Serial.println(F("No data available. Run task first."));
-            }
-        }
-        else if (command.startsWith("config "))
-        {
-            processConfigCommand(command);
-        }
-        else if (command.startsWith("input_mode "))
-        {
-            // Process input mode change command
-            int mode = command.substring(11).toInt();
-            setInputMode(mode);
-        }
+        return false;
     }
+
+    // Handle different commands
+    if (command == "start")
+    {
+        // Exit debug mode if active
+        if (state == STATE_DEBUG)
+        {
+            Serial.println(F("exiting debug mode"));
+            pixels.clear();
+            pixels.show();
+        }
+        startTask();
+        return true;
+    }
+    else if (command == "pause")
+    {
+        // Toggle pause state
+        if (state == STATE_RUNNING || state == STATE_PAUSED)
+        {
+            pauseTask(state != STATE_PAUSED);
+        }
+        return true;
+    }
+    else if (command == "debug")
+    {
+        Serial.println(F("enter debug mode"));
+
+        enterDebugMode();
+        return true;
+    }
+    else if (command == "exit-debug")
+    {
+        // Exit debug mode and return to IDLE state
+        if (state == STATE_DEBUG)
+        {
+            Serial.println(F("exiting debug mode"));
+            pixels.clear();
+            pixels.show();
+            state = STATE_IDLE;
+            Serial.println(F("ready"));
+        }
+        return true;
+    }
+    else if (command == "exit")
+    {
+        // Cancel the current study and discard collected data
+        if (state == STATE_RUNNING || state == STATE_PAUSED)
+        {
+            state = STATE_IDLE;
+            pixels.clear();
+            pixels.show();
+            dataCollector.reset(); // Discard collected data
+            Serial.println(F("exiting"));
+            Serial.println(F("ready"));
+        }
+        else if (state == STATE_DATA_READY)
+        {
+            state = STATE_IDLE;
+            dataCollector.reset(); // Discard collected data
+            Serial.println(F("exiting"));
+            Serial.println(F("ready"));
+        }
+        return true;
+    }
+    else if (command == "get_data")
+    {
+        // Send collected data over serial if available
+        if (state == STATE_DATA_READY)
+        {
+            sendData();
+        }
+        else
+        {
+            Serial.println(F("No data available. Run task first."));
+        }
+        return true;
+    }
+    else if (command.startsWith("config "))
+    {
+        processConfigCommand(command);
+        return true;
+    }
+
+    return false; // Command not recognized
 }
 
 void NBackTask::processConfigCommand(const String &command)
@@ -366,49 +368,6 @@ void NBackTask::startTask()
 
     // Start first trial
     startNextTrial();
-}
-
-// TODO: make this a fixed sequence for each task to make study results comparable
-void NBackTask::generateSequence()
-{
-    // Seed the random number generator
-    randomSeed(analogRead(A0));
-
-    // Aim for approximately 25% targets
-    int targetCount = maxTrials / 4;
-
-    // First, fill with random colors
-    for (int i = 0; i < maxTrials; i++)
-    {
-        colorSequence[i] = random(COLORS_USED);
-    }
-
-    // Then ensure we have target trials (n-back matches) after position n
-    int targetsPlaced = 0;
-    while (targetsPlaced < targetCount)
-    {
-        // Choose a random position after the n-back position
-        int pos = random(nBackLevel, maxTrials);
-
-        // Make this position match the n-back position (creating a target)
-        colorSequence[pos] = colorSequence[pos - nBackLevel];
-        targetsPlaced++;
-    }
-
-    // Print the sequence with target indicators for debugging
-    Serial.println(F("Sequence generated:"));
-    for (int i = 0; i < maxTrials; i++)
-    {
-        Serial.print(colorSequence[i]);
-
-        // Mark target positions with an asterisk
-        if (i >= nBackLevel && colorSequence[i] == colorSequence[i - nBackLevel])
-        {
-            Serial.print(F("*"));
-        }
-        Serial.print(F(" "));
-    }
-    Serial.println();
 }
 
 void NBackTask::pauseTask(bool pause)
@@ -573,47 +532,6 @@ void NBackTask::manageTrials()
     }
 }
 
-void NBackTask::renderPixels()
-{
-    if (flags.feedbackActive)
-    {
-        setNeoPixelColor(WHITE);
-        return;
-    }
-
-    if (state == STATE_DEBUG)
-    {
-        setNeoPixelColor(debugColorIndex);
-        return;
-    }
-
-    if (state == STATE_IDLE || state == STATE_PAUSED || state == STATE_DATA_READY)
-    {
-        pixels.clear();
-        pixels.show();
-        return;
-    }
-
-    if (flags.inInterStimulusInterval)
-    {
-        pixels.clear();
-        pixels.show();
-        return;
-    }
-
-    if (flags.awaitingResponse)
-    {
-        // Show the current color during response window
-        setNeoPixelColor(colorSequence[currentTrial]);
-    }
-    else
-    {
-        // Show nothing during stimulus presentation
-        pixels.clear();
-        pixels.show();
-    }
-}
-
 void NBackTask::evaluateTrialOutcome()
 {
     // Record the stimulus end time relative to session start
@@ -689,7 +607,7 @@ void NBackTask::evaluateTrialOutcome()
         currentTrial + 1,                                 // 1-based stimulus number
         colorSequence[currentTrial],                      // stimulus color
         flags.targetTrial,                                // is_target
-        flags.buttonPressed,                              // response_made
+        flags.responseIsConfirm,                          // response_made - true = confirm, false = wrong
         isCorrect,                                        // is_correct
         trialData.stimulusOnsetTime,                      // stimulus_onset_time
         flags.buttonPressed ? trialData.responseTime : 0, // response_time
@@ -774,6 +692,47 @@ void NBackTask::handleButtonPress()
 // Visual Feedback
 //==============================================================================
 
+void NBackTask::renderPixels()
+{
+    if (flags.feedbackActive)
+    {
+        setNeoPixelColor(WHITE);
+        return;
+    }
+
+    if (state == STATE_DEBUG)
+    {
+        setNeoPixelColor(debugColorIndex);
+        return;
+    }
+
+    if (state == STATE_IDLE || state == STATE_PAUSED || state == STATE_DATA_READY)
+    {
+        pixels.clear();
+        pixels.show();
+        return;
+    }
+
+    if (flags.inInterStimulusInterval)
+    {
+        pixels.clear();
+        pixels.show();
+        return;
+    }
+
+    if (flags.awaitingResponse)
+    {
+        // Show the current color during response window
+        setNeoPixelColor(colorSequence[currentTrial]);
+    }
+    else
+    {
+        // Show nothing during stimulus presentation
+        pixels.clear();
+        pixels.show();
+    }
+}
+
 void NBackTask::handleVisualFeedback(boolean startFeedback)
 {
     if (startFeedback)
@@ -806,94 +765,8 @@ void NBackTask::setNeoPixelColor(int colorIndex)
 }
 
 //==============================================================================
-// Debug Mode
-//==============================================================================
-
-void NBackTask::runDebugMode()
-{
-    handleVisualFeedback(false);
-    renderPixels();
-
-    unsigned long currentTime = millis();
-
-    if (inputMode == CAPACITIVE_INPUT && currentTime % 300 == 0 && false)
-    {
-        int touchValue = touchRead(TOUCH_CORRECT_PIN);
-        int touchValue2 = touchRead(TOUCH_WRONG_PIN);
-        Serial.print(F("Touch value: "));
-        Serial.print(touchValue);
-        Serial.print(F(" Touch value 2: "));
-        Serial.println(touchValue2);
-    }
-
-    // Cycle through colors automatically at set intervals
-    if (currentTime - lastColorChangeTime > timing.debugColorDuration)
-    {
-        // Move to next color in cycle
-        debugColorIndex = (debugColorIndex + 1) % COLOR_COUNT;
-
-        // Report current color
-        Serial.print(F("Debug: Showing color "));
-        Serial.print(debugColorIndex);
-
-        // Show color name for readability
-        const char *colorNames[] = {"RED", "GREEN", "BLUE, YELLOW, PURPLE"};
-        if (debugColorIndex < COLOR_COUNT)
-        {
-            Serial.print(F(" ("));
-            Serial.print(colorNames[debugColorIndex]);
-            Serial.println(F(")"));
-        }
-        else
-        {
-            Serial.println();
-        }
-
-        lastColorChangeTime = currentTime;
-    }
-
-    // Check correct button/touch input
-    if (isCorrectPressed())
-    {
-        Serial.println(F("Debug: CONFIRM BUTTON PRESSED!"));
-        // Provide visual feedback for button press
-        handleVisualFeedback(true);
-    }
-
-    // Check wrong button/touch input
-    if (isWrongPressed())
-    {
-        Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
-        // Provide visual feedback for button press
-        handleVisualFeedback(true);
-    }
-}
-
-//==============================================================================
 // Input Handling System
 //==============================================================================
-
-void NBackTask::setInputMode(int mode)
-{
-    if (mode == 0)
-    {
-        inputMode = BUTTON_INPUT;
-        Serial.println(F("Input mode set to BUTTON"));
-    }
-    else if (mode == 1)
-    {
-        inputMode = CAPACITIVE_INPUT;
-        Serial.println(F("Input mode set to CAPACITIVE TOUCH"));
-    }
-    else
-    {
-        Serial.println(F("Invalid input mode. Use 0 for button or 1 for capacitive touch."));
-        return;
-    }
-
-    // Re-initialize the input system with the new mode
-    initializeInput();
-}
 
 void NBackTask::initializeInput()
 {
@@ -1055,6 +928,49 @@ void NBackTask::resetMetrics()
     metrics.reactionTimeCount = 0; // Count of measured reaction times
 }
 
+// TODO: make this a fixed sequence for each task to make study results comparable
+void NBackTask::generateSequence()
+{
+    // Seed the random number generator
+    randomSeed(analogRead(A0));
+
+    // Aim for approximately 25% targets
+    int targetCount = maxTrials / 4;
+
+    // First, fill with random colors
+    for (int i = 0; i < maxTrials; i++)
+    {
+        colorSequence[i] = random(COLORS_USED);
+    }
+
+    // Then ensure we have target trials (n-back matches) after position n
+    int targetsPlaced = 0;
+    while (targetsPlaced < targetCount)
+    {
+        // Choose a random position after the n-back position
+        int pos = random(nBackLevel, maxTrials);
+
+        // Make this position match the n-back position (creating a target)
+        colorSequence[pos] = colorSequence[pos - nBackLevel];
+        targetsPlaced++;
+    }
+
+    // Print the sequence with target indicators for debugging
+    Serial.println(F("Sequence generated:"));
+    for (int i = 0; i < maxTrials; i++)
+    {
+        Serial.print(colorSequence[i]);
+
+        // Mark target positions with an asterisk
+        if (i >= nBackLevel && colorSequence[i] == colorSequence[i - nBackLevel])
+        {
+            Serial.print(F("*"));
+        }
+        Serial.print(F(" "));
+    }
+    Serial.println();
+}
+
 void NBackTask::reportResults()
 {
     int totalTargets = metrics.correctResponses + metrics.missedTargets;
@@ -1089,4 +1005,68 @@ void NBackTask::reportResults()
     Serial.print(F("Session Duration: "));
     Serial.println(timestampBuffer);
     Serial.println(F("======================"));
+}
+
+//==============================================================================
+// Debug Mode
+//==============================================================================
+
+void NBackTask::runDebugMode()
+{
+    handleVisualFeedback(false);
+    renderPixels();
+
+    unsigned long currentTime = millis();
+
+    if (inputMode == CAPACITIVE_INPUT && currentTime % 1000 == 0)
+    {
+        int touchValue = touchRead(TOUCH_CORRECT_PIN);
+        int touchValue2 = touchRead(TOUCH_WRONG_PIN);
+        Serial.print(F("Touch value: "));
+        Serial.print(touchValue);
+        Serial.print(F(" Touch value 2: "));
+        Serial.println(touchValue2);
+    }
+
+    // Cycle through colors automatically at set intervals
+    if (currentTime - lastColorChangeTime > timing.debugColorDuration)
+    {
+        // Move to next color in cycle
+        debugColorIndex = (debugColorIndex + 1) % COLOR_COUNT;
+
+        // Report current color
+        Serial.print(F("Debug: Showing color "));
+        Serial.print(debugColorIndex);
+
+        // Show color name for readability
+        const char *colorNames[] = {"RED", "GREEN", "BLUE", "YELLOW", "PURPLE", "WHITE"};
+        if (debugColorIndex < COLOR_COUNT)
+        {
+            Serial.print(F(" ("));
+            Serial.print(colorNames[debugColorIndex]);
+            Serial.println(F(")"));
+        }
+        else
+        {
+            Serial.println();
+        }
+
+        lastColorChangeTime = currentTime;
+    }
+
+    // Check correct button/touch input
+    if (isCorrectPressed())
+    {
+        Serial.println(F("Debug: CONFIRM BUTTON PRESSED!"));
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
+    }
+
+    // Check wrong button/touch input
+    if (isWrongPressed())
+    {
+        Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
+        // Provide visual feedback for button press
+        handleVisualFeedback(true);
+    }
 }

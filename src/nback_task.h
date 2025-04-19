@@ -35,8 +35,8 @@
 // Capacitive touch configuration
 #define TOUCH_CORRECT_PIN 14       // Pin connected to the capacitive touch sensor
 #define TOUCH_WRONG_PIN 13         // Pin connected to the capacitive touch sensor
-#define TOUCH_THRESHOLD_CORRECT 32 // Touch sensitivity threshold
-#define TOUCH_THRESHOLD_WRONG 32   // Touch sensitivity threshold
+#define TOUCH_THRESHOLD_CORRECT 36 // Touch sensitivity threshold
+#define TOUCH_THRESHOLD_WRONG 36   // Touch sensitivity threshold
 
 //==============================================================================
 // Task Parameters
@@ -59,7 +59,7 @@ enum ColorIndex
     PURPLE = 4,
     WHITE = 5,       // Special case for visual feedback
     COLOR_COUNT = 6, // Total number of colors used
-    COLORS_USED = 3  // Number of colors used in the task
+    COLORS_USED = 5  // Number of colors used in the task
 };
 
 //==============================================================================

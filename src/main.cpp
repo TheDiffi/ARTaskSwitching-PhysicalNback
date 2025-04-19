@@ -24,7 +24,7 @@ void setup()
 
   // Initialize the task
   nBackTask.setup();
-  nBackTask.configure(2000, 2000, 2, 10, "TEST", 1);
+  nBackTask.configure(2000, 2000, 1, 10, "TEST", 1);
 
   // Uncomment to run task directly at startup
   /*

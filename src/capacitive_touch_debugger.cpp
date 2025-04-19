@@ -102,7 +102,6 @@ void CapacitiveTouchDebugger::begin()
     Serial.print(F("Active sensor: "));
     Serial.println(sensorNames[activeSensor]);
     Serial.println(F("Type 'help' for available commands or 'exit' to quit."));
-    printPrompt();
 }
 
 bool CapacitiveTouchDebugger::processCommand(const String &command)
@@ -122,7 +121,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
     else if (command == "monitor" || command == "m")
     {
         monitor(100000, 100); // Monitor for 30 seconds
-        printPrompt();
         return true;
     }
     else if (command == "exit" || command == "q")
@@ -135,14 +133,12 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
     {
         // Calibrate the active sensor
         calibrate(activeSensor);
-        printPrompt();
         return true;
     }
     else if (command == "calibrateall" || command == "ca")
     {
         // Calibrate all sensors
         calibrateAll();
-        printPrompt();
         return true;
     }
     else if (command.startsWith("calibrate "))
@@ -157,7 +153,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
         {
             Serial.println(F("Invalid sensor number"));
         }
-        printPrompt();
         return true;
     }
     else if (command.startsWith("set "))
@@ -193,7 +188,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
             Serial.print(F(" set to: "));
             Serial.println(newThreshold);
         }
-        printPrompt();
         return true;
     }
     else if (command.startsWith("sensor "))
@@ -210,7 +204,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
         {
             Serial.println(F("Invalid sensor number"));
         }
-        printPrompt();
         return true;
     }
     else if (command == "read" || command == "r")
@@ -241,7 +234,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
                 Serial.println();
             }
         }
-        printPrompt();
         return true;
     }
     else if (command == "stats" || command == "s")
@@ -275,7 +267,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
                 Serial.println();
             }
         }
-        printPrompt();
         return true;
     }
     else if (command == "reset")
@@ -289,7 +280,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
             numReadings[i] = 0;
         }
         Serial.println(F("Statistics reset."));
-        printPrompt();
         return true;
     }
 
@@ -297,15 +287,8 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
     Serial.print(F("Unknown command: "));
     Serial.println(command);
     Serial.println(F("Type 'help' for available commands."));
-    printPrompt();
 
     return false;
-}
-
-void CapacitiveTouchDebugger::printPrompt()
-{
-    Serial.print(sensorNames[activeSensor]);
-    Serial.print(F(" > "));
 }
 
 void CapacitiveTouchDebugger::update()
@@ -507,15 +490,6 @@ void CapacitiveTouchDebugger::calibrate(int sensorIndex)
     Serial.print(sensorNames[sensorIndex]);
     Serial.println(F(" ==="));
     Serial.println(F("Step 1: Please do NOT touch the sensor..."));
-
-    // Initial delay to ensure user isn't touching the sensor
-    Serial.println(F("Getting ready in:"));
-    for (int i = readyCountdown; i > 0; i--)
-    {
-        Serial.print(i);
-        Serial.println(F(" seconds..."));
-        delay(1000);
-    }
 
     // Take readings with no touch
     Serial.println(F("Taking untouched baseline readings for 5 seconds..."));

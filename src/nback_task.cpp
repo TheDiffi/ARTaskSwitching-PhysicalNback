@@ -6,7 +6,7 @@
 
 NBackTask::NBackTask()
     : pixels(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
-      nBackLevel(2),
+      nBackLevel(1),
       maxTrials(MAX_TRIALS),
       state(STATE_IDLE),
       currentTrial(0),

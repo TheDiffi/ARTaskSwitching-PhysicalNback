@@ -130,7 +130,6 @@ private:
 
     // Helper methods
     void printReading(int sensorIndex, int reading);
-    void printPrompt();
 };
 
 #endif // CAPACITIVE_TOUCH_DEBUGGER_H

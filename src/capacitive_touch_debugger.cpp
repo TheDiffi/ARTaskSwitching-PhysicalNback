@@ -283,11 +283,6 @@ bool CapacitiveTouchDebugger::processCommand(const String &command)
         return true;
     }
 
-    // Command not recognized
-    Serial.print(F("Unknown command: "));
-    Serial.println(command);
-    Serial.println(F("Type 'help' for available commands."));
-
     return false;
 }
 

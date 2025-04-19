@@ -265,6 +265,8 @@ bool NBackTask::processSerialCommands(const String &command)
 
 void NBackTask::processConfigCommand(const String &command)
 {
+    // `config ${config.stimDuration},${config.interStimulusInterval},${config.nBackLevel},${config.trialsNumber},${config.studyId},${config.sessionNumber},%${sequenceStr}%`;
+
     // Parse configuration parameters
     String configStr = command.substring(7);
 
@@ -291,24 +293,44 @@ void NBackTask::processConfigCommand(const String &command)
             // 5th parameter is the study ID
             configStr.substring(startPos, commaPos).toCharArray(studyId, sizeof(studyId));
         }
+        else if (paramIndex == 5)
+        {
+            // 6th parameter is the session number
+            sessionNum = configStr.substring(startPos, commaPos).toInt();
+        }
         startPos = commaPos + 1;
         paramIndex++;
     }
 
-    // Last parameter (no comma after it)
-    if (paramIndex == 5 && startPos < configStr.length())
+    // Check if a sequence was provided (format: %color1,color2,...%)
+    bool hasCustomSequence = false;
+    String sequenceStr = "";
+
+    // Look for the sequence format %sequence% after the basic config parameters
+    int seqStartPos = configStr.indexOf('%', startPos);
+    if (seqStartPos != -1)
     {
-        // Last parameter is session number
-        sessionNum = configStr.substring(startPos).toInt();
-        paramIndex++;
+        int seqEndPos = configStr.indexOf('%', seqStartPos + 1);
+        if (seqEndPos != -1)
+        {
+            // Extract the sequence string without the % symbols
+            sequenceStr = configStr.substring(seqStartPos + 1, seqEndPos);
+            hasCustomSequence = true;
+        }
     }
 
     // Apply configuration if all 6 parameters were found
     if (paramIndex == 6)
     {
-        if (configure(params[0], params[1], params[2], params[3], studyId, sessionNum))
+        if (configure(params[0], params[1], params[2], params[3], studyId, sessionNum, false))
         {
             Serial.println(F("Configuration applied successfully"));
+
+            // Apply custom sequence if provided
+            if (hasCustomSequence && colorSequence != nullptr)
+            {
+                parseAndSetColorSequence(sequenceStr);
+            }
         }
         else
         {
@@ -317,7 +339,7 @@ void NBackTask::processConfigCommand(const String &command)
     }
     else
     {
-        Serial.println(F("Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number"));
+        Serial.println(F("Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number[,%color1,color2,...%]"));
     }
 }
 
@@ -349,9 +371,6 @@ void NBackTask::startTask()
     flags.targetTrial = false;
     flags.feedbackActive = false;
     flags.inInterStimulusInterval = false;
-
-    // Generate a new sequence for this task
-    generateSequence();
 
     // Reset data collector for a new session
     dataCollector.reset();
@@ -406,7 +425,7 @@ void NBackTask::endTask()
 }
 
 bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
-                          uint8_t numTrials, const char *studyId, uint16_t sessionNum)
+                          uint8_t numTrials, const char *studyId, uint16_t sessionNum, bool genSequence)
 {
     // Validate parameters (basic sanity checks)
     if (stimDuration < 100 || interStimulusInt < 100 || nBackLvl < 1 ||
@@ -455,7 +474,11 @@ bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint
     dataCollector.begin(study_id, sessionNum);
 
     // Generate new sequence with updated parameters
-    generateSequence();
+    if (genSequence)
+    {
+        // Generate a new random sequence of colors
+        generateSequence();
+    }
 
     // Print confirmation of new settings
     Serial.println(F("Configuration updated:"));
@@ -502,6 +525,9 @@ void NBackTask::manageTrials()
 
             // Record when the stimulus ended
             stimulusEndTime = currentTime;
+
+            // Send `trial-complete` message to serial
+            Serial.println(F("trial-complete"));
 
             // Evaluate the trial outcome at the end
             evaluateTrialOutcome();
@@ -614,6 +640,7 @@ void NBackTask::evaluateTrialOutcome()
         flags.buttonPressed ? trialData.reactionTime : 0, // reaction_time
         trialData.stimulusEndTime                         // stimulus_end_time
     );
+    Serial.println(F("-----------"));
 }
 
 void NBackTask::startNextTrial()
@@ -1068,5 +1095,78 @@ void NBackTask::runDebugMode()
         Serial.println(F("Debug: WRONG BUTTON PRESSED!"));
         // Provide visual feedback for button press
         handleVisualFeedback(true);
+    }
+}
+
+//==============================================================================
+// Color Parsing and Sequence Setting
+//==============================================================================
+
+int NBackTask::parseColorName(const String &colorName)
+{
+    // Convert color name to lowercase for case-insensitive comparison
+    String lowerColor = colorName;
+    lowerColor.toLowerCase();
+
+    // Map color names to their enum values
+    if (lowerColor == "red")
+        return RED;
+    if (lowerColor == "green")
+        return GREEN;
+    if (lowerColor == "blue")
+        return BLUE;
+    if (lowerColor == "yellow")
+        return YELLOW;
+    if (lowerColor == "purple")
+        return PURPLE;
+    if (lowerColor == "white")
+        return WHITE;
+
+    // Default to RED if color name is not recognized
+    Serial.print(F("Warning: Unknown color name '"));
+    Serial.print(colorName);
+    Serial.println(F("', defaulting to RED"));
+    return RED;
+}
+
+void NBackTask::parseAndSetColorSequence(const String &sequenceStr)
+{
+    int index = 0;
+    int startPos = 0;
+    int commaPos = -1;
+
+    // Parse each color name separated by commas
+    while (index < maxTrials && (commaPos = sequenceStr.indexOf(',', startPos)) != -1)
+    {
+        String colorName = sequenceStr.substring(startPos, commaPos);
+
+        // Convert to enum value and store in sequence
+        colorSequence[index] = parseColorName(colorName);
+
+        // Move to next position
+        startPos = commaPos + 1;
+        index++;
+    }
+
+    // Handle the last color if there is one
+    if (index < maxTrials && startPos < sequenceStr.length())
+    {
+        String colorName = sequenceStr.substring(startPos);
+        colorSequence[index] = parseColorName(colorName);
+        index++;
+    }
+
+    // If the sequence doesn't fill the entire trials, log a warning
+    if (index < maxTrials)
+    {
+        Serial.print(F("!!!Warning: Provided sequence has only "));
+        Serial.print(index);
+        Serial.print(F(" colors, but "));
+        Serial.print(maxTrials);
+        Serial.println(F(" trials are configured.!!!"));
+    }
+    else
+    {
+        Serial.println(F("Custom color sequence applied successfully"));
     }
 }

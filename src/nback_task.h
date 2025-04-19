@@ -124,7 +124,7 @@ public:
 
     // Configuration function (public to allow direct configuration)
     bool configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
-                   uint8_t numTrials, const char *studyId, uint16_t sessionNum);
+                   uint8_t numTrials, const char *studyId, uint16_t sessionNum, bool genSequence);
 
     void startTask();
     bool processSerialCommands(const String &command);
@@ -264,6 +264,12 @@ private:
     //--------------------------------------------------------------------------
     void resetMetrics();
     void reportResults();
+
+    //--------------------------------------------------------------------------
+    // Color Parsing Methods
+    //--------------------------------------------------------------------------
+    int parseColorName(const String &colorName);
+    void parseAndSetColorSequence(const String &sequenceStr);
 };
 
 #endif // NBACK_TASK_H

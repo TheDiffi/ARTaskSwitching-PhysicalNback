@@ -6,9 +6,9 @@
 #include "data_collector.h"
 
 // if touchRead is not defined, define it
-// #ifndef touchRead
-// #define touchRead(p) (analogRead(p))
-// #endif
+#ifndef touchRead
+#define touchRead(p) (analogRead(p))
+#endif
 
 //==============================================================================
 // Hardware Configuration

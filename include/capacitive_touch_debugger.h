@@ -3,6 +3,11 @@
 
 #include <Arduino.h>
 
+// if touchRead is not defined, define it
+#ifndef touchRead
+#define touchRead(p) (analogRead(p))
+#endif
+
 /**
  * @brief Class for debugging and calibrating capacitive touch sensors
  *

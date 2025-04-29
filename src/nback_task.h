@@ -69,11 +69,12 @@ enum ColorIndex
 // State machine for the task
 enum TaskState
 {
-    STATE_IDLE,      // Task not running, waiting for commands
-    STATE_RUNNING,   // Task is actively running
-    STATE_PAUSED,    // Task is temporarily paused
-    STATE_DEBUG,     // Hardware debug mode active
-    STATE_DATA_READY // Task complete, data ready to send
+    STATE_IDLE,       // Task not running, waiting for commands
+    STATE_RUNNING,    // Task is actively running
+    STATE_PAUSED,     // Task is temporarily paused
+    STATE_DEBUG,      // Hardware debug mode active
+    STATE_DATA_READY, // Task complete, data ready to send
+    STATE_INPUT_MODE  // Input forwarding mode
 };
 
 // Input mode selection
@@ -128,6 +129,12 @@ public:
 
     void startTask();
     bool processSerialCommands(const String &command);
+
+    // Input mode forwarding functions (separated for easy extraction to another class)
+    void enterInputMode();
+    void exitInputMode();
+    void handleInputModeLoop();
+    void sendInputEvent(const char *inputType, bool isPressed);
 
 private:
     //--------------------------------------------------------------------------

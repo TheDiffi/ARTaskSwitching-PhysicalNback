@@ -153,3 +153,27 @@ The implementation is split across several files:
 3. **Configurability**: Supporting various experimental protocols
 4. **Code Structure**: Well-organized, maintainable implementation
 5. **Usability**: Clear interface for both participants and researchers
+
+## Input Mode Usage
+
+The device supports a special input mode where button/touch press events are immediately forwarded over serial to the host computer. This is useful for integrating the device as a general input controller for another application.
+
+### How to Use Input Mode
+
+1. Send the command `input_mode` to enter the special input forwarding mode
+2. The device will send button press events in the format: `button-press:CONFIRM` or `button-press:WRONG`
+3. To exit input mode, send the command `exit`
+4. The device will respond with `INPUT_MODE_EXIT` followed by `ready`
+
+### Integration with Master Program
+
+To use this in the Master Program:
+
+-   Configure a serial port for the N-Back device
+-   Send the `input_mode` command to enable input forwarding
+-   Listen for messages that match the pattern `button-press:*`
+-   Parse these messages to extract the button type (CONFIRM/WRONG)
+-   When done, send `exit` to return to normal mode
+-   Look for the `INPUT_MODE_EXIT` message to confirm exiting
+
+This functionality allows using the N-Back device as a simple dual-button input controller for other applications without requiring task configuration.

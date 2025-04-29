@@ -159,6 +159,11 @@ void NBackTask::loop()
         handleButtonPress();
         break;
 
+    case STATE_INPUT_MODE:
+        // Handle input forwarding mode
+        handleInputModeLoop();
+        break;
+
     case STATE_IDLE:
     case STATE_DATA_READY:
         // Nothing to do in idle or data ready states
@@ -222,7 +227,7 @@ bool NBackTask::processSerialCommands(const String &command)
     }
     else if (command == "exit")
     {
-        // Cancel the current study and discard collected data
+        // Cancel the current study or exit input mode
         if (state == STATE_RUNNING || state == STATE_PAUSED)
         {
             state = STATE_IDLE;
@@ -238,6 +243,10 @@ bool NBackTask::processSerialCommands(const String &command)
             dataCollector.reset(); // Discard collected data
             Serial.println(F("exiting"));
             Serial.println(F("ready"));
+        }
+        else if (state == STATE_INPUT_MODE)
+        {
+            exitInputMode();
         }
         return true;
     }
@@ -257,6 +266,11 @@ bool NBackTask::processSerialCommands(const String &command)
     else if (command.startsWith("config "))
     {
         processConfigCommand(command);
+        return true;
+    }
+    else if (command == "input_mode")
+    {
+        enterInputMode();
         return true;
     }
 
@@ -1169,4 +1183,93 @@ void NBackTask::parseAndSetColorSequence(const String &sequenceStr)
     {
         Serial.println(F("Custom color sequence applied successfully"));
     }
+}
+
+//==============================================================================
+// Input Mode Forwarding Functions
+//==============================================================================
+
+void NBackTask::enterInputMode()
+{
+    // Enter input forwarding mode
+    state = STATE_INPUT_MODE;
+
+    // Turn off LEDs when entering input mode
+    pixels.clear();
+    pixels.show();
+
+    // Reset button states for clean input forwarding
+    buttonCorrect.lastState = false;
+    buttonWrong.lastState = false;
+    touchCorrect.lastState = false;
+    touchWrong.lastState = false;
+
+    Serial.println(F("Nback Entering INPUT MODE"));
+    Serial.println(F("Send 'exit' to return to IDLE state"));
+}
+
+void NBackTask::exitInputMode()
+{
+    // Only perform exit actions if we're actually in input mode
+    if (state != STATE_INPUT_MODE)
+    {
+        return;
+    }
+
+    // Return to idle state
+    state = STATE_IDLE;
+
+    // Turn off LEDs
+    pixels.clear();
+    pixels.show();
+
+    // Reset button states
+    buttonCorrect.lastState = false;
+    buttonWrong.lastState = false;
+    touchCorrect.lastState = false;
+    touchWrong.lastState = false;
+
+    // Send clear exit message
+    Serial.println(F("INPUT_MODE_EXIT"));
+    Serial.println(F("ready"));
+}
+
+void NBackTask::handleInputModeLoop()
+{
+    // Current state of inputs
+    bool confirmCurrent = readCorrectInput();
+    bool wrongCurrent = readWrongInput();
+
+    // Only send PRESS events
+    if (confirmCurrent && !buttonCorrect.lastState)
+    {
+        sendInputEvent("CONFIRM", true);
+    }
+    buttonCorrect.lastState = confirmCurrent;
+
+    if (wrongCurrent && !buttonWrong.lastState)
+    {
+        sendInputEvent("WRONG", true);
+    }
+    buttonWrong.lastState = wrongCurrent;
+
+    // Check for exit command
+    if (Serial.available() > 0)
+    {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+        command.toLowerCase();
+
+        if (command == "exit")
+        {
+            exitInputMode();
+        }
+    }
+}
+
+void NBackTask::sendInputEvent(const char *inputType, bool isPressed)
+{
+    // Use the simplified "button-press:<type>" format
+    Serial.print(F("button-press:"));
+    Serial.println(inputType);
 }

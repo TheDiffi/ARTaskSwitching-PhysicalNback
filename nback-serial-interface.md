@@ -14,7 +14,7 @@ The Arduino accepts the following commands over serial:
 ### 1. Configuration
 
 ```
-config <stimDuration>,<interStimulusInterval>,<nBackLevel>,<trialsNumber>,<studyId>,<sessionNumber>
+config <stimDuration>,<interStimulusInterval>,<nBackLevel>,<trialsNumber>,<studyId>,<sessionNumber>[,%<color1>,<color2>,...%]
 ```
 
 Sets up the task with the specified parameters:
@@ -25,11 +25,18 @@ Sets up the task with the specified parameters:
 -   **trialsNumber**: Number of trials per session (maximum 50)
 -   **studyId**: Identifier for the study (alphanumeric, max 9 chars)
 -   **sessionNumber**: Session number (integer)
+-   **color sequence** (optional): Custom sequence of colors enclosed in % symbols (e.g., %red,blue,green,yellow%)
 
 Example:
 
 ```
 config 1500,1000,2,30,STUDY01,1
+```
+
+With custom sequence:
+
+```
+config 1500,1000,2,5,STUDY01,1,%red,green,blue,yellow,red%
 ```
 
 Response:
@@ -121,6 +128,8 @@ Debug: Showing color 0 (RED)
 ...
 ```
 
+If using capacitive touch input, the system will periodically display touch sensor values.
+
 ### 5. Exit Debug Mode
 
 ```
@@ -179,6 +188,51 @@ data-completed
 
 The marker "data-completed" indicates the end of data transmission.
 
+### 8. Input Mode
+
+```
+input_mode
+```
+
+Enters a special mode where button/touch press events are immediately forwarded over serial to the host computer. This is useful for integrating the device as a generic input controller.
+
+Initial response:
+
+```
+Nback Entering INPUT MODE
+Button/touch events will be forwarded over serial
+Format: button-press:<type>
+Where <type> is 'CONFIRM' or 'WRONG'
+Send 'exit' to return to IDLE state
+```
+
+When a button is pressed, it sends events like:
+
+```
+button-press:CONFIRM
+```
+
+or
+
+```
+button-press:WRONG
+```
+
+To exit input mode, send the `exit` command:
+
+```
+exit
+```
+
+Response:
+
+```
+INPUT_MODE_EXIT
+ready
+```
+
+The special marker "INPUT_MODE_EXIT" is sent to help your master program detect when input mode has ended.
+
 ## Data Format
 
 ### Trial Data
@@ -191,7 +245,7 @@ Each trial produces one row of CSV data with the following fields:
 4. **task_type**: Always "n-back"
 5. **event_type**: Always "trial_complete"
 6. **stimulus_number**: Position in sequence (1-based)
-7. **stimulus_color**: Color shown ("red", "green", "blue", "yellow")
+7. **stimulus_color**: Color shown ("red", "green", "blue", "yellow", "purple")
 8. **is_target**: Whether this was a target trial ("true"/"false")
 9. **response_made**: Whether user responded ("true"/"false")
 10. **is_correct**: Whether response was correct ("true"/"false")
@@ -227,7 +281,7 @@ A typical session follows this sequence:
 
 -   If configuration fails, you'll receive: `Failed to apply configuration - invalid parameters`
 -   If requesting data before task is complete: `No data available. Run task first.`
--   If configuration format is incorrect: `Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number`
+-   If configuration format is incorrect: `Invalid config format. Use: config stimDuration,interStimulusInterval,nBackLevel,trialsNumber,study_id,session_number[,%color1,color2,...%]`
 
 ## Implementation Notes
 
@@ -236,3 +290,7 @@ A typical session follows this sequence:
 -   Reaction times are reported in raw milliseconds for easier analysis
 -   The maximum number of trials is limited to 50 due to memory constraints
 -   Special marker words ("task-completed" and "data-completed") are used to signal completion of operations
+-   Available colors: "red", "green", "blue", "yellow", "purple"
+-   Input modes: Button (0) or Capacitive Touch (1)
+-   The task has support for both physical buttons and capacitive touch sensors
+-   The INPUT MODE provides direct forwarding of button press events, useful for custom applications

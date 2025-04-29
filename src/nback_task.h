@@ -5,11 +5,6 @@
 #include <Adafruit_NeoPixel.h>
 #include "data_collector.h"
 
-// if touchRead is not defined, define it
-#ifndef touchRead
-#define touchRead(p) (analogRead(p))
-#endif
-
 //==============================================================================
 // Hardware Configuration
 //==============================================================================
@@ -19,6 +14,7 @@
 #define NEOPIXEL_PIN 32 // Pin connected to the NeoPixel for ESP32
 #define INPUT_MODE CAPACITIVE_INPUT
 #elif defined(ESP8266)
+#define touchRead(p) (analogRead(p))
 #define NEOPIXEL_PIN 4 // Pin connected to the NeoPixel for ESP8266 (D1 Mini)
 #define INPUT_MODE BUTTON_INPUT
 #else

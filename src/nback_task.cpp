@@ -273,6 +273,12 @@ bool NBackTask::processSerialCommands(const String &command)
         enterInputMode();
         return true;
     }
+    else if (command == "sync")
+    {
+        // Send time sync message to master device
+        sendTimeSyncToMaster();
+        return true;
+    }
 
     return false; // Command not recognized
 }
@@ -370,12 +376,21 @@ void NBackTask::sendData()
     Serial.println(F("data-completed"));
 }
 
+void NBackTask::sendTimeSyncToMaster()
+{
+    // Send time sync message to master device
+    unsigned long current = millis();
+    Serial.println("sync " + String(current));
+}
+
 //==============================================================================
 // State Management
 //==============================================================================
 
 void NBackTask::startTask()
 {
+    sendTimeSyncToMaster();
+
     // Reset performance metrics for the new task
     resetMetrics();
 

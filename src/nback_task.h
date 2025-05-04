@@ -233,6 +233,7 @@ private:
     //--------------------------------------------------------------------------
     void processConfigCommand(const String &command);
     void sendData();
+    void sendTimeSyncToMaster();
 
     //--------------------------------------------------------------------------
     // State Management Methods

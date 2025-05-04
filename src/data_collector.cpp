@@ -96,11 +96,7 @@ void DataCollector::sendDataOverSerial()
         Serial.print(F(","));
         Serial.print(session_number);
         Serial.print(F(","));
-
-        // Format timestamp as HH:MM:SS:mmm
-        formatTimestamp(trial.stimulus_end_time, timestampBuffer, sizeof(timestampBuffer));
-        Serial.print(timestampBuffer);
-
+        Serial.print(trial.stimulus_end_time);
         Serial.print(F(","));
         Serial.print(F("n-back"));
         Serial.print(F(","));
@@ -139,20 +135,14 @@ void DataCollector::sendDataOverSerial()
         Serial.print(trial.is_correct ? F("true") : F("false"));
         Serial.print(F(","));
 
-        // Format all time values as HH:MM:SS:mmm
-        formatTimestamp(trial.stimulus_onset_time, timestampBuffer, sizeof(timestampBuffer));
-        Serial.print(timestampBuffer);
+        // Keep all time values as milliseconds for analysis
+        Serial.print(trial.stimulus_onset_time);
         Serial.print(F(","));
-
-        formatTimestamp(trial.response_time, timestampBuffer, sizeof(timestampBuffer));
-        Serial.print(timestampBuffer);
+        Serial.print(trial.response_time);
         Serial.print(F(","));
-
         Serial.print(trial.reaction_time); // Keep reaction time as raw milliseconds for analysis
         Serial.print(F(","));
-
-        formatTimestamp(trial.stimulus_end_time, timestampBuffer, sizeof(timestampBuffer));
-        Serial.print(timestampBuffer);
+        Serial.print(trial.stimulus_end_time);
 
         Serial.println();
     }
@@ -170,18 +160,12 @@ void DataCollector::sendDataOverSerial()
     uint32_t currentTime = millis();
     uint32_t totalDuration = currentTime - session_start_time;
 
-    // Format timestamps
+    // Format timestamps for summary
     char startTimeBuffer[16];
     char completionTimeBuffer[16];
     char durationBuffer[16];
-
-    // Format absolute start time
     formatTimestamp(session_absolute_millis, startTimeBuffer, sizeof(startTimeBuffer));
-
-    // Format completion time (absolute)
     formatTimestamp(currentTime, completionTimeBuffer, sizeof(completionTimeBuffer));
-
-    // Format duration
     formatTimestamp(totalDuration, durationBuffer, sizeof(durationBuffer));
 
     // Output session summary line
@@ -189,7 +173,7 @@ void DataCollector::sendDataOverSerial()
     Serial.print(F(","));
     Serial.print(session_number);
     Serial.print(F(","));
-    Serial.print(session_absolute_millis); // Raw milliseconds
+    Serial.print(session_absolute_millis);
     Serial.print(F(","));
     Serial.print(startTimeBuffer);
     Serial.print(F(","));

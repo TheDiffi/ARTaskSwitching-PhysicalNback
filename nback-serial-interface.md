@@ -233,6 +233,22 @@ ready
 
 The special marker "INPUT_MODE_EXIT" is sent to help your master program detect when input mode has ended.
 
+### 9. Time Synchronization
+
+```
+sync
+```
+
+Requests the current Arduino time in milliseconds. This command is useful for synchronizing the timing between the host computer and the Arduino device.
+
+Response:
+
+```
+sync 1234567
+```
+
+Where the number is the current Arduino time in milliseconds (from `millis()`). This allows the host computer to calculate time offsets and correctly interpret timestamps in the response data.
+
 ## Data Format
 
 ### Trial Data
@@ -286,7 +302,11 @@ A typical session follows this sequence:
 ## Implementation Notes
 
 -   Timestamps are relative to session start (not absolute time)
--   All times are formatted as HH:MM:SS:mmm (hours:minutes:seconds:milliseconds)
+-   All times are in milliseconds returned by millis()
+-   The "sync" command can be used to synchronize timing between the host computer and Arduino device
+    -   Send "sync" to get the current Arduino millis() value
+    -   Compare with host computer time to calculate offset
+    -   Use this offset to convert Arduino timestamps to host computer time if needed
 -   Reaction times are reported in raw milliseconds for easier analysis
 -   The maximum number of trials is limited to 50 due to memory constraints
 -   Special marker words ("task-completed" and "data-completed") are used to signal completion of operations

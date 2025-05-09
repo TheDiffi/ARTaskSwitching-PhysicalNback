@@ -16,11 +16,9 @@ NBackTask::NBackTask()
       debugColorIndex(0),
       lastColorChangeTime(0),
       inputMode(INPUT_MODE),
-      colorSequence(nullptr)
+      colorSequence(nullptr),
+      study_id("DEFAULT")
 {
-    // Set default study ID
-    strcpy(study_id, "DEFAULT");
-
     // Initialize timing parameters (in milliseconds)
     timing.stimulusDuration = 2000;      // How long each stimulus is shown
     timing.interStimulusInterval = 2000; // Time between stimuli
@@ -233,14 +231,12 @@ bool NBackTask::processSerialCommands(const String &command)
             state = STATE_IDLE;
             pixels.clear();
             pixels.show();
-            dataCollector.reset(); // Discard collected data
             Serial.println(F("exiting"));
             Serial.println(F("ready"));
         }
         else if (state == STATE_DATA_READY)
         {
             state = STATE_IDLE;
-            dataCollector.reset(); // Discard collected data
             Serial.println(F("exiting"));
             Serial.println(F("ready"));
         }
@@ -292,7 +288,7 @@ void NBackTask::processConfigCommand(const String &command)
 
     // Variables to store parsed values
     uint16_t params[4] = {0}; // For numeric parameters: stimulus duration, ISI, n-back level, trials
-    char studyId[10] = {0};   // For study ID
+    String studyId;           // For study ID
     uint16_t sessionNum = 0;  // For session number
 
     // Parse comma-separated values using a more streamlined approach
@@ -311,7 +307,7 @@ void NBackTask::processConfigCommand(const String &command)
         else if (paramIndex == 4)
         {
             // 5th parameter is the study ID
-            configStr.substring(startPos, commaPos).toCharArray(studyId, sizeof(studyId));
+            studyId = configStr.substring(startPos, commaPos);
         }
         else if (paramIndex == 5)
         {
@@ -404,6 +400,13 @@ void NBackTask::startTask()
     // Reset data collector for a new session
     dataCollector.reset();
 
+    // Send real-time start event with configuration data
+    char configData[100];
+    snprintf(configData, sizeof(configData),
+             "n-back_level:%d,stim_duration:%d,inter_stim_interval:%d,trials:%d",
+             nBackLevel, timing.stimulusDuration, timing.interStimulusInterval, maxTrials);
+    dataCollector.sendTimestampedEvent("start", configData);
+
     // Start the task
     state = STATE_RUNNING;
 
@@ -423,6 +426,9 @@ void NBackTask::pauseTask(bool pause)
     // Update state based on pause flag
     state = pause ? STATE_PAUSED : STATE_RUNNING;
     Serial.println(pause ? F("Task paused") : F("Task resumed"));
+
+    // Send real-time event for pause/resume
+    dataCollector.sendTimestampedEvent(pause ? "pause" : "resume");
 }
 
 void NBackTask::enterDebugMode()
@@ -454,11 +460,11 @@ void NBackTask::endTask()
 }
 
 bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
-                          uint8_t numTrials, const char *studyId, uint16_t sessionNum, bool genSequence)
+                          uint8_t numTrials, const String &studyId, uint16_t sessionNum, bool genSequence)
 {
     // Validate parameters (basic sanity checks)
     if (stimDuration < 100 || interStimulusInt < 100 || nBackLvl < 1 ||
-        numTrials < 5 || numTrials > 50 || strlen(studyId) == 0)
+        numTrials < 5 || numTrials > 50 || studyId.length() == 0)
     {
         return false;
     }
@@ -495,9 +501,8 @@ bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint
         }
     }
 
-    // Set study ID (with safety null termination)
-    strncpy(study_id, studyId, sizeof(study_id) - 1);
-    study_id[sizeof(study_id) - 1] = '\0';
+    // Set study ID
+    study_id = studyId;
 
     // Initialize data collector with study information and session number
     dataCollector.begin(study_id, sessionNum);
@@ -625,7 +630,7 @@ void NBackTask::evaluateTrialOutcome()
 
                 Serial.println(F("CORRECT RESPONSE!"));
                 Serial.print(F("Reaction time: "));
-                Serial.print(trialData.reactionTime);
+                Serial.println(trialData.reactionTime);
                 Serial.println(F(" ms"));
             }
             else
@@ -645,7 +650,6 @@ void NBackTask::evaluateTrialOutcome()
                 isCorrect = false;
                 Serial.println(F("FALSE ALARM!"));
                 Serial.print(F("Reaction time: "));
-                Serial.print(trialData.reactionTime);
                 Serial.println(F(" ms (not counted in average)"));
             }
             else
@@ -669,6 +673,21 @@ void NBackTask::evaluateTrialOutcome()
         flags.buttonPressed ? trialData.reactionTime : 0, // reaction_time
         trialData.stimulusEndTime                         // stimulus_end_time
     );
+
+    // Send real-time data for trial completion
+    dataCollector.sendRealTimeEvent(
+        "trial_complete",
+        currentTrial + 1,                                      // 1-based stimulus number
+        colorSequence[currentTrial],                           // stimulus color
+        flags.targetTrial,                                     // is_target
+        flags.buttonPressed ? flags.responseIsConfirm : false, // response_made
+        isCorrect,                                             // is_correct
+        trialData.stimulusOnsetTime,                           // stimulus_onset_time
+        flags.buttonPressed ? trialData.responseTime : 0,      // response_time
+        flags.buttonPressed ? trialData.reactionTime : 0,      // reaction_time
+        trialData.stimulusEndTime                              // stimulus_end_time
+    );
+
     Serial.println(F("-----------"));
 }
 
@@ -1282,9 +1301,12 @@ void NBackTask::handleInputModeLoop()
     }
 }
 
-void NBackTask::sendInputEvent(const char *inputType, bool isPressed)
+void NBackTask::sendInputEvent(const String &inputType, bool isPressed)
 {
-    // Use the simplified "button-press:<type>" format
+    // Use the simplified "button-press:<type>" format for compatibility
     Serial.print(F("button-press:"));
     Serial.println(inputType);
+
+    // Send real-time event data for input forwarding with write> prefix
+    dataCollector.sendTimestampedEvent("input_forwarded", inputType);
 }

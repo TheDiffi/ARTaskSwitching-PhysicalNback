@@ -282,12 +282,50 @@ After the trial data, a session summary is provided with:
 6. **total_duration**: Total session duration (HH:MM:SS:mmm)
 7. **total_trials**: Number of trials completed
 
+## Real-Time Data Reporting
+
+In addition to the end-of-session data collection, the N-Back task now supports real-time event reporting. These events are sent immediately as they occur with the prefix `write>` to indicate to the master program that this data should be saved to a file. This allows for live monitoring and recording of task events as they happen.
+
+### Real-Time Events
+
+The following events are reported in real-time:
+
+1. **Trial Completion Events**
+
+```
+write>STUDY01,1,2054,n-back,trial_complete,1,green,false,false,true,53,0,0,2054
+```
+
+2. **Input Forwarding Events**
+
+```
+write>STUDY01,1,1234,n-back,input_forwarded,0,none,false,false,false,0,0,0,0,CONFIRM
+```
+
+3. **Pause/Resume Events**
+
+```
+write>STUDY01,1,3456,n-back,pause,0,none,false,false,false,0,0,0,0
+write>STUDY01,1,5678,n-back,resume,0,none,false,false,false,0,0,0,0
+```
+
+4. **Start Events**
+
+```
+write>STUDY01,1,0,n-back,start,0,none,false,false,false,0,0,0,0,n-back_level:2,stim_duration:1500,inter_stim_interval:1000,trials:30
+```
+
+### Real-Time Data Format
+
+Real-time events follow the same CSV format as the end-of-session data, with the `write>` prefix added to indicate that this data should be saved immediately. For event types that don't have all the trial-specific information, default values (0 or "none") are used for the empty fields.
+
 ## Task Flow
 
 A typical session follows this sequence:
 
 1. Configure the task with the `config` command
 2. Start the task with the `start` command
+    - Real-time events will now be reported with the `write>` prefix
 3. Wait for the "task-completed" marker
 4. Retrieve data with the `get_data` command
 5. Wait for the "data-completed" marker
@@ -314,3 +352,4 @@ A typical session follows this sequence:
 -   Input modes: Button (0) or Capacitive Touch (1)
 -   The task has support for both physical buttons and capacitive touch sensors
 -   The INPUT MODE provides direct forwarding of button press events, useful for custom applications
+-   Real-time events with the `write>` prefix allow for immediate data collection while the task is running

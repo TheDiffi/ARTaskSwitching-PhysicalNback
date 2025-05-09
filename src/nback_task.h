@@ -121,7 +121,7 @@ public:
 
     // Configuration function (public to allow direct configuration)
     bool configure(uint16_t stimDuration, uint16_t interStimulusInt, uint8_t nBackLvl,
-                   uint8_t numTrials, const char *studyId, uint16_t sessionNum, bool genSequence);
+                   uint8_t numTrials, const String &studyId, uint16_t sessionNum, bool genSequence);
 
     void startTask();
     bool processSerialCommands(const String &command);
@@ -130,7 +130,7 @@ public:
     void enterInputMode();
     void exitInputMode();
     void handleInputModeLoop();
-    void sendInputEvent(const char *inputType, bool isPressed);
+    void sendInputEvent(const String &inputType, bool isPressed);
 
 private:
     //--------------------------------------------------------------------------
@@ -226,7 +226,7 @@ private:
 
     // Data collection
     DataCollector dataCollector; // Data collector for research data
-    char study_id[10];           // Current study identifier
+    String study_id;             // Current study identifier
 
     //--------------------------------------------------------------------------
     // Command Processing Methods

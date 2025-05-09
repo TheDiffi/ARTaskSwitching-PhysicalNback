@@ -3,8 +3,7 @@
 
 #include <Arduino.h>
 
-// if touchRead is not defined, define it
-#ifndef touchRead
+#if defined(ESP8266)
 #define touchRead(p) (analogRead(p))
 #endif
 

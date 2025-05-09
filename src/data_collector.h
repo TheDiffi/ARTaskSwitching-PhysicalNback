@@ -48,7 +48,7 @@ public:
     DataCollector();
 
     // Initialize the data collector for a new session
-    void begin(const char *study_id, uint16_t session_number);
+    void begin(const String &study_id, uint16_t session_number);
 
     // Reset all stored data
     void reset();
@@ -68,6 +68,21 @@ public:
     // Send all collected data over serial
     void sendDataOverSerial();
 
+    // Send real-time event data with write> prefix for immediate file writing
+    void sendRealTimeEvent(const String &event_type,
+                           uint8_t stimulus_number = 0,
+                           uint8_t stimulus_color = 0,
+                           bool is_target = false,
+                           bool response_made = false,
+                           bool is_correct = false,
+                           uint32_t stimulus_onset_time = 0,
+                           uint32_t response_time = 0,
+                           uint16_t reaction_time = 0,
+                           uint32_t stimulus_end_time = 0);
+
+    // Send a simple timestamped event with write> prefix
+    void sendTimestampedEvent(const String &event_type, const String &additional_data = "");
+
     //----------------------------------------------------------------------------
     // Accessors
     //----------------------------------------------------------------------------
@@ -80,6 +95,9 @@ public:
 
     // Get absolute millis() when session started
     uint32_t getSessionAbsoluteStartTime() const;
+
+    // Get session number
+    uint16_t getSessionNumber() const { return session_number; }
 
     //----------------------------------------------------------------------------
     // Utility Functions
@@ -100,7 +118,7 @@ private:
     //----------------------------------------------------------------------------
 
     // Configuration data
-    char study_id[10];                // Study identifier
+    String study_id;                  // Study identifier
     uint16_t session_number;          // Session number
     uint32_t session_start_time;      // millis() value when session started
     uint32_t session_absolute_millis; // Absolute millis() when session started

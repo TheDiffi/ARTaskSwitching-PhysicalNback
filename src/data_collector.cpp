@@ -5,21 +5,18 @@
 //==============================================================================
 
 DataCollector::DataCollector()
-    : session_number(0),
+    : study_id(""),
+      session_number(0),
       session_start_time(0),
       session_absolute_millis(0),
       trial_count(0)
 {
-    // Initialize study_id with empty string
-    study_id[0] = '\0';
 }
 
-void DataCollector::begin(const char *study_id, uint16_t session_number)
+void DataCollector::begin(const String &study_id, uint16_t session_number)
 {
     // Store study information
-    strncpy(this->study_id, study_id, sizeof(this->study_id) - 1);
-    this->study_id[sizeof(this->study_id) - 1] = '\0'; // Ensure null termination
-
+    this->study_id = study_id;
     this->session_number = session_number;
     this->session_start_time = millis();
     this->session_absolute_millis = millis(); // Store absolute timestamp
@@ -188,6 +185,106 @@ void DataCollector::sendDataOverSerial()
 
     // Close data socket
     Serial.println(F("Closing Data Socket"));
+}
+
+void DataCollector::sendRealTimeEvent(const String &event_type,
+                                      uint8_t stimulus_number,
+                                      uint8_t stimulus_color,
+                                      bool is_target,
+                                      bool response_made,
+                                      bool is_correct,
+                                      uint32_t stimulus_onset_time,
+                                      uint32_t response_time,
+                                      uint16_t reaction_time,
+                                      uint32_t stimulus_end_time)
+{
+    // Start with the write> prefix to indicate this should be saved to a file
+    Serial.print(F("write>"));
+
+    // Common fields
+    Serial.print(study_id);
+    Serial.print(F(","));
+    Serial.print(session_number);
+    Serial.print(F(","));
+    Serial.print(millis() - session_start_time); // Current timestamp relative to session start
+    Serial.print(F(","));
+    Serial.print(F("n-back"));
+    Serial.print(F(","));
+    Serial.print(event_type);
+
+    // N-Back specific fields
+    Serial.print(F(","));
+    Serial.print(stimulus_number);
+    Serial.print(F(","));
+
+    // Color name
+    switch (stimulus_color)
+    {
+    case 0:
+        Serial.print(F("red"));
+        break;
+    case 1:
+        Serial.print(F("green"));
+        break;
+    case 2:
+        Serial.print(F("blue"));
+        break;
+    case 3:
+        Serial.print(F("yellow"));
+        break;
+    case 4:
+        Serial.print(F("purple"));
+        break;
+    default:
+        Serial.print(F("unknown"));
+        break;
+    }
+
+    Serial.print(F(","));
+    Serial.print(is_target ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(response_made ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(is_correct ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(stimulus_onset_time);
+    Serial.print(F(","));
+    Serial.print(response_time);
+    Serial.print(F(","));
+    Serial.print(reaction_time);
+    Serial.print(F(","));
+    Serial.print(stimulus_end_time);
+
+    Serial.println();
+}
+
+void DataCollector::sendTimestampedEvent(const String &event_type, const String &additional_data)
+{
+    // Start with the write> prefix to indicate this should be saved to a file
+    Serial.print(F("write>"));
+
+    // Common fields
+    Serial.print(study_id);
+    Serial.print(F(","));
+    Serial.print(session_number);
+    Serial.print(F(","));
+    Serial.print(millis() - session_start_time); // Current timestamp relative to session start
+    Serial.print(F(","));
+    Serial.print(F("n-back"));
+    Serial.print(F(","));
+    Serial.print(event_type);
+
+    // For simple events, fill remaining columns with defaults except for the additional data
+    Serial.print(F(",0,none,false,false,false,0,0,0,0"));
+
+    // If additional data provided, add it as a comment at the end
+    if (additional_data.length() > 0)
+    {
+        Serial.print(F(","));
+        Serial.print(additional_data);
+    }
+
+    Serial.println();
 }
 
 //==============================================================================

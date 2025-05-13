@@ -65,10 +65,10 @@ NBackTask::NBackTask()
 
     // Initialize the NeoPixel colors array
     colors[RED] = pixels.Color(255, 0, 0);       // Red
-    colors[GREEN] = pixels.Color(0, 255, 0);     // Green
-    colors[BLUE] = pixels.Color(0, 0, 255);      // Blue
-    colors[YELLOW] = pixels.Color(255, 255, 0);  // Yellow
-    colors[PURPLE] = pixels.Color(255, 0, 255);  // Purple
+    colors[GREEN] = pixels.Color(10, 75, 0);     // Green
+    colors[BLUE] = pixels.Color(0, 0, 150);      // Blue
+    colors[YELLOW] = pixels.Color(75, 75, 0);  // Yellow
+    colors[PURPLE] = pixels.Color(100, 0, 100);  // Purple
     colors[WHITE] = pixels.Color(255, 255, 255); // White
 }
 

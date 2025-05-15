@@ -39,7 +39,7 @@
 //==============================================================================
 
 // Task constants - default values, can be changed via config command
-#define MAX_TRIALS 30 // Default, can be increased up to 50
+#define MAX_TRIALS 100 // Default, can be increased up to
 
 //==============================================================================
 // Color Definitions

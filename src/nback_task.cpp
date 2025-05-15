@@ -67,7 +67,7 @@ NBackTask::NBackTask()
     colors[RED] = pixels.Color(255, 0, 0);       // Red
     colors[GREEN] = pixels.Color(10, 75, 0);     // Green
     colors[BLUE] = pixels.Color(0, 0, 150);      // Blue
-    colors[YELLOW] = pixels.Color(75, 75, 0);  // Yellow
+    colors[YELLOW] = pixels.Color(75, 75, 0);    // Yellow
     colors[PURPLE] = pixels.Color(100, 0, 100);  // Purple
     colors[WHITE] = pixels.Color(255, 255, 255); // White
 }
@@ -464,7 +464,7 @@ bool NBackTask::configure(uint16_t stimDuration, uint16_t interStimulusInt, uint
 {
     // Validate parameters (basic sanity checks)
     if (stimDuration < 100 || interStimulusInt < 100 || nBackLvl < 1 ||
-        numTrials < 5 || numTrials > 50 || studyId.length() == 0)
+        numTrials < 5 || numTrials > 100 || studyId.length() == 0)
     {
         return false;
     }
@@ -630,7 +630,7 @@ void NBackTask::evaluateTrialOutcome()
 
                 Serial.println(F("CORRECT RESPONSE!"));
                 Serial.print(F("Reaction time: "));
-                Serial.println(trialData.reactionTime);
+                Serial.print(trialData.reactionTime);
                 Serial.println(F(" ms"));
             }
             else
@@ -650,6 +650,7 @@ void NBackTask::evaluateTrialOutcome()
                 isCorrect = false;
                 Serial.println(F("FALSE ALARM!"));
                 Serial.print(F("Reaction time: "));
+                Serial.print(trialData.reactionTime);
                 Serial.println(F(" ms (not counted in average)"));
             }
             else
@@ -1305,8 +1306,11 @@ void NBackTask::sendInputEvent(const String &inputType, bool isPressed)
 {
     // Use the simplified "button-press:<type>" format for compatibility
     Serial.print(F("button-press:"));
-    Serial.println(inputType);
-
+    Serial.print(inputType);
+    /*     Serial.print(":");
+        Serial.println(millis()); */
+    // wait 10 ms
+    delay(10);
     // Send real-time event data for input forwarding with write> prefix
     dataCollector.sendTimestampedEvent("input_forwarded", inputType);
 }

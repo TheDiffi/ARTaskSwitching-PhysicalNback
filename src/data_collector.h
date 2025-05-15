@@ -8,7 +8,7 @@
 //==============================================================================
 
 // Maximum number of trials to store data for
-#define MAX_DATA_ROWS 50
+#define MAX_DATA_ROWS 100
 
 //==============================================================================
 // Data Structures

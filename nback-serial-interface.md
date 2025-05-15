@@ -22,7 +22,7 @@ Sets up the task with the specified parameters:
 -   **stimDuration**: Duration in milliseconds that each stimulus is shown (e.g., 1500)
 -   **interStimulusInterval**: Time in milliseconds between stimuli (e.g., 1000)
 -   **nBackLevel**: The N value for the N-Back task (1 = 1-back, 2 = 2-back, etc.)
--   **trialsNumber**: Number of trials per session (maximum 50)
+-   **trialsNumber**: Number of trials per session (maximum 100)
 -   **studyId**: Identifier for the study (alphanumeric, max 9 chars)
 -   **sessionNumber**: Session number (integer)
 -   **color sequence** (optional): Custom sequence of colors enclosed in % symbols (e.g., %red,blue,green,yellow%)
@@ -346,7 +346,7 @@ A typical session follows this sequence:
     -   Compare with host computer time to calculate offset
     -   Use this offset to convert Arduino timestamps to host computer time if needed
 -   Reaction times are reported in raw milliseconds for easier analysis
--   The maximum number of trials is limited to 50 due to memory constraints
+-   The maximum number of trials is limited to 100 due to memory constraints
 -   Special marker words ("task-completed" and "data-completed") are used to signal completion of operations
 -   Available colors: "red", "green", "blue", "yellow", "purple"
 -   Input modes: Button (0) or Capacitive Touch (1)

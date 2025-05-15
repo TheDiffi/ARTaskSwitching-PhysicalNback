@@ -40,7 +40,7 @@ This project implements a cognitive psychology experimental paradigm called the 
 4. **Task Configuration**:
     - All parameters configurable via serial commands
     - Settings include stimulus duration, interval time, n-back level, number of trials, study ID, and session number
-    - Maximum 50 trials per session due to memory constraints
+    - Maximum 100 trials per session due to memory constraints
 
 ## Data Collection Requirements
 
@@ -119,7 +119,7 @@ This project implements a cognitive psychology experimental paradigm called the 
 
 -   Efficient data structures with bit fields to save RAM
 -   Careful management of string constants using F() macro
--   Limited to 50 trials maximum due to SRAM constraints
+-   Limited to 100 trials maximum due to SRAM constraints
 -   Currently uses approximately 52.8% of available RAM (1082/2048 bytes)
 -   Uses approximately 46.9% of available flash memory (15112/32256 bytes)
 

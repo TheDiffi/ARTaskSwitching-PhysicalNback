@@ -142,6 +142,7 @@ void DataCollector::sendDataOverSerial()
         Serial.print(trial.stimulus_end_time);
 
         Serial.println();
+        delay(10);
     }
 
     // End trial data section

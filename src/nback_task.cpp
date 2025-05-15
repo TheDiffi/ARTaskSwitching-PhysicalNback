@@ -1306,7 +1306,7 @@ void NBackTask::sendInputEvent(const String &inputType, bool isPressed)
 {
     // Use the simplified "button-press:<type>" format for compatibility
     Serial.print(F("button-press:"));
-    Serial.print(inputType);
+    Serial.println(inputType);
     /*     Serial.print(":");
         Serial.println(millis()); */
     // wait 10 ms

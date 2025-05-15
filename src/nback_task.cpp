@@ -93,7 +93,7 @@ void NBackTask::setup()
     pixels.setBrightness(255);
 
     // Initial power-on test
-    setNeoPixelColor(PURPLE);
+    setNeoPixelColor(WHITE);
     delay(1000);
     pixels.clear();
     pixels.show();

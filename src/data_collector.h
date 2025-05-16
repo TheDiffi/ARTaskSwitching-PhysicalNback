@@ -80,7 +80,6 @@ public:
                            uint16_t reaction_time = 0,
                            uint32_t stimulus_end_time = 0);
 
-    String printColorName(uint8_t color_index);
     // Send a simple timestamped event with write> prefix
     void sendTimestampedEvent(const String &event_type, const String &additional_data = "");
 
@@ -106,6 +105,9 @@ public:
 
     // Convert milliseconds to HH:MM:SS:mmm format
     void formatTimestamp(uint32_t milliseconds, char *buffer, size_t bufferSize);
+
+    // Print color name based on index
+    void printColorName(uint8_t color_index);
 
     // Print boolean value as "true" or "false"
     void printBool(bool value);

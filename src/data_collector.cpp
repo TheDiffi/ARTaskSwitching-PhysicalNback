@@ -105,7 +105,24 @@ void DataCollector::sendDataOverSerial()
         Serial.print(F(","));
 
         // Color name
-        printColorName(trial.stimulus_color);
+        switch (trial.stimulus_color)
+        {
+        case 0:
+            Serial.print(F("red"));
+            break;
+        case 1:
+            Serial.print(F("green"));
+            break;
+        case 2:
+            Serial.print(F("blue"));
+            break;
+        case 3:
+            Serial.print(F("yellow"));
+            break;
+        default:
+            Serial.print(F("unknown"));
+            break;
+        }
 
         Serial.print(F(","));
         Serial.print(trial.is_target ? F("true") : F("false"));
@@ -201,30 +218,8 @@ void DataCollector::sendRealTimeEvent(const String &event_type,
     Serial.print(stimulus_number);
     Serial.print(F(","));
 
-    printColorName(stimulus_color);
-
-    Serial.print(F(","));
-    Serial.print(is_target ? F("true") : F("false"));
-    Serial.print(F(","));
-    Serial.print(response_made ? F("true") : F("false"));
-    Serial.print(F(","));
-    Serial.print(is_correct ? F("true") : F("false"));
-    Serial.print(F(","));
-    Serial.print(stimulus_onset_time);
-    Serial.print(F(","));
-    Serial.print(response_time);
-    Serial.print(F(","));
-    Serial.print(reaction_time);
-    Serial.print(F(","));
-    Serial.print(stimulus_end_time);
-
-    Serial.println();
-}
-
-String DataCollector::printColorName(uint8_t color_index)
-{
     // Color name
-    switch (color_index)
+    switch (stimulus_color)
     {
     case 0:
         Serial.print(F("red"));
@@ -245,6 +240,23 @@ String DataCollector::printColorName(uint8_t color_index)
         Serial.print(F("unknown"));
         break;
     }
+
+    Serial.print(F(","));
+    Serial.print(is_target ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(response_made ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(is_correct ? F("true") : F("false"));
+    Serial.print(F(","));
+    Serial.print(stimulus_onset_time);
+    Serial.print(F(","));
+    Serial.print(response_time);
+    Serial.print(F(","));
+    Serial.print(reaction_time);
+    Serial.print(F(","));
+    Serial.print(stimulus_end_time);
+
+    Serial.println();
 }
 
 void DataCollector::sendTimestampedEvent(const String &event_type, const String &additional_data)
@@ -310,6 +322,28 @@ void DataCollector::formatTimestamp(uint32_t milliseconds, char *buffer, size_t 
 
     // Format as HH:MM:SS:mmm
     snprintf(buffer, bufferSize, "%02d:%02d:%02d:%03d", hours, minutes, seconds, ms);
+}
+
+void DataCollector::printColorName(uint8_t color_index)
+{
+    switch (color_index)
+    {
+    case 0:
+        Serial.print(F("red"));
+        break;
+    case 1:
+        Serial.print(F("green"));
+        break;
+    case 2:
+        Serial.print(F("blue"));
+        break;
+    case 3:
+        Serial.print(F("yellow"));
+        break;
+    default:
+        Serial.print(F("unknown"));
+        break;
+    }
 }
 
 void DataCollector::printBool(bool value)

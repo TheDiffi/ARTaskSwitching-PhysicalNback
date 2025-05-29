@@ -119,6 +119,9 @@ void DataCollector::sendDataOverSerial()
         case 3:
             Serial.print(F("yellow"));
             break;
+        case 4:
+            Serial.print(F("purple"));
+            break;
         default:
             Serial.print(F("unknown"));
             break;

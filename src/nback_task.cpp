@@ -29,6 +29,7 @@ NBackTask::NBackTask()
     flags.awaitingResponse = false;
     flags.targetTrial = false;
     flags.feedbackActive = false;
+    flags.feedbackEnabled = false;
     flags.buttonPressed = false;
     flags.responseIsConfirm = false;
     flags.inInterStimulusInterval = false;
@@ -811,7 +812,7 @@ void NBackTask::renderPixels()
 
 void NBackTask::handleVisualFeedback(boolean startFeedback)
 {
-    if (startFeedback)
+    if (startFeedback && flags.feedbackEnabled)
     {
         // Start/restart visual feedback with white flash
         flags.feedbackActive = true;
